@@ -245,3 +245,54 @@ export function parseDeviceQuery(result: BinaryNode): string[] {
 
 	return devices
 }
+
+// ---------------------------------------------------------------------------
+// Presence
+// ---------------------------------------------------------------------------
+
+export type ChatState = 'composing' | 'paused' | 'recording'
+
+/**
+ * The "typing…" indicator.
+ *
+ * Worth more than polish on a sales bot: an instant reply reads as a robot and
+ * people disengage. Showing composing for a beat proportional to the message
+ * length makes the exchange feel handled by someone.
+ *
+ * The state is not sticky — WhatsApp clears it after a few seconds, so a long
+ * pause needs it re-sent rather than set once.
+ */
+export function buildChatState(toJid: string, state: ChatState, fromJid?: string): BinaryNode {
+	const attrs: Record<string, string> = { to: toJid }
+
+	if (fromJid) {
+		attrs.from = fromJid
+	}
+
+	return {
+		tag: 'chatstate',
+		attrs,
+		content: [{ tag: state, attrs: {} }],
+	}
+}
+
+/** Announces us as online/offline; required before presence is believed. */
+export function buildPresence(type: 'available' | 'unavailable', name?: string): BinaryNode {
+	return {
+		tag: 'presence',
+		attrs: name ? { name, type } : { type },
+	}
+}
+
+/**
+ * How long to "type" for a message of this length.
+ *
+ * Roughly 40 words per minute with a floor and a ceiling: fast enough not to
+ * stall the funnel, slow enough not to look scripted. Capped because nobody
+ * waits eight seconds for a price list.
+ */
+export function typingDurationFor(text: string): number {
+	const perCharMs = 30
+
+	return Math.min(Math.max(text.length * perCharMs, 700), 2800)
+}
