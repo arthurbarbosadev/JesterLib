@@ -1,0 +1,32 @@
+{
+  "name": "jester",
+  "version": "0.0.1",
+  "description": "Implementação em TypeScript do protocolo WhatsApp Web (multi-device)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./binary": "./dist/binary/index.js",
+    "./proto": "./dist/proto/index.js"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types \"test/**/*.test.ts\"",
+    "test:watch": "node --test --watch --experimental-strip-types \"test/**/*.test.ts\"",
+    "vendor:tokens": "node scripts/vendor-tokens.mjs"
+  },
+  "keywords": ["whatsapp", "protocol", "noise", "websocket"],
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.9.0"
+  }
+}
