@@ -414,11 +414,13 @@ export class JesterSocket extends EventEmitter {
 
 		this.updateState({ qr: buildQrString(ref, this.auth.creds) })
 
+		// Deliberately NOT unref'd: while a QR is pending, the process is waiting
+		// for a human to scan it and must stay alive. `onClose` clears the timer,
+		// so it never keeps the loop open longer than the pairing attempt.
 		this.qrTimer = setTimeout(
 			() => this.emitNextQr(this.options.qrRefreshMs ?? 20_000),
 			validForMs,
 		)
-		this.qrTimer.unref?.()
 	}
 
 	private onPairSuccess(node: BinaryNode): void {
