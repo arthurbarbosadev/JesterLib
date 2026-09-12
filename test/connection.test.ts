@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { before, test } from 'node:test'
 import { initAuthCreds, deserializeCreds, serializeCreds } from '../src/auth/creds.ts'
 import { makeInMemoryKeyStore, type AuthenticationState } from '../src/auth/state.ts'
 import { setTokenDictionary } from '../src/binary/tokens.ts'
-import { Platform, WebSubPlatform } from '../src/proto/wa.ts'
+import { DeviceProps, Platform, WebSubPlatform } from '../src/proto/wa.ts'
 import {
 	ConnectionError,
 	DisconnectReason,
@@ -124,6 +125,56 @@ test('the registration ClientPayload arrives intact on the other side', async ()
 
 	assert.equal(payload.userAgent?.platform, Platform.WEB)
 	assert.equal(payload.webInfo?.webSubPlatform, WebSubPlatform.WEB_BROWSER)
+
+	socket.end()
+})
+
+test('buildHash is the md5 of the WhatsApp version, not of the browser', async () => {
+	// Regression. This was md5(browser.join(' ')), which connects and produces a
+	// perfectly good QR — and then the phone refuses the pairing with a generic
+	// "cannot connect". The server cross-checks it against userAgent.appVersion.
+	const version: [number, number, number] = [2, 3000, 1043857760]
+
+	const [clientTransport, serverTransport] = createLinkedTransports()
+	const server = attachFakeServer(serverTransport)
+	const socket = new JesterSocket({ auth: makeAuth(), transport: clientTransport, version })
+
+	await socket.connect()
+	await server.ready()
+	await waitForOpen(socket)
+
+	const pairing = server.clientPayload()?.devicePairingData
+	assert.ok(pairing)
+
+	assert.deepEqual(
+		pairing.buildHash,
+		createHash('md5').update(version.join('.')).digest(),
+		'buildHash must hash the dotted version string',
+	)
+
+	socket.end()
+})
+
+test('the registration payload sets pull to false', async () => {
+	const { socket, server } = await connectPair()
+	await waitForOpen(socket)
+
+	assert.equal(server.clientPayload()?.pull, false)
+
+	socket.end()
+})
+
+test('DeviceProps reports the companion version, not the browser version', async () => {
+	const { socket, server } = await connectPair({ browser: ['Jester', 'Chrome', '999.888.777'] })
+	await waitForOpen(socket)
+
+	const props = DeviceProps.decode(server.clientPayload()!.devicePairingData!.deviceProps!)
+
+	// Deriving this from the browser string is what made the phone reject it.
+	assert.equal(props.version?.primary, 10)
+	assert.equal(props.version?.secondary, 15)
+	assert.equal(props.version?.tertiary, 7)
+	assert.equal(props.os, 'Jester')
 
 	socket.end()
 })

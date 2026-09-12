@@ -20,20 +20,31 @@ import {
  * - register: no account yet, carries `devicePairingData` and asks for the QR;
  * - login: already paired, identifies the account by `username` + `device`.
  *
- * The "cosmetic" fields (OS version, manufacturer) are not cosmetic: they make
- * up what the phone shows in its list of linked devices.
+ * Several values here look cosmetic and are not. The server cross-checks
+ * `buildHash` against the advertised version, and the phone refuses a pairing
+ * whose `DeviceProps` it does not recognise — with a generic "cannot connect",
+ * which is a miserable thing to debug.
  */
 
 export type ClientPayloadConfig = {
 	/** WhatsApp Web version. Too far behind and the server refuses the connection. */
 	version: [number, number, number]
-	/** [browser, os, version] — shown in the phone's linked-devices list. */
+	/** [os label, browser, version] — the os label shows in the phone's device list. */
 	browser: [string, string, string]
 	countryCode?: string
 	languageCode?: string
 }
 
 export const DEFAULT_BROWSER: [string, string, string] = ['Jester', 'Chrome', '120.0.0']
+
+/**
+ * The companion app version reported in DeviceProps.
+ *
+ * Fixed, and deliberately NOT derived from `browser`: this is the WhatsApp
+ * companion client version the phone expects to see, not the browser's. Sending
+ * the browser version here makes the phone reject the pairing.
+ */
+const COMPANION_VERSION = { primary: 10, secondary: 15, tertiary: 7 }
 
 function encodeBigEndian(value: number, length = 4): Buffer {
 	const out = Buffer.alloc(length)
@@ -44,6 +55,12 @@ function encodeBigEndian(value: number, length = 4): Buffer {
 	}
 
 	return out
+}
+
+function platformTypeFor(browser: string): number {
+	const key = browser.toUpperCase() as keyof typeof PlatformType
+
+	return PlatformType[key] ?? PlatformType.CHROME
 }
 
 function baseClientPayload(config: ClientPayloadConfig): ClientPayloadType {
@@ -59,8 +76,8 @@ function baseClientPayload(config: ClientPayloadConfig): ClientPayloadType {
 			osVersion: '0.1',
 			device: 'Desktop',
 			osBuildNumber: '0.1',
-			localeLanguageIso6391: config.languageCode ?? 'pt',
-			localeCountryIso31661Alpha2: config.countryCode ?? 'BR',
+			localeLanguageIso6391: config.languageCode ?? 'en',
+			localeCountryIso31661Alpha2: config.countryCode ?? 'US',
 			mcc: '000',
 			mnc: '000',
 		},
@@ -70,32 +87,43 @@ function baseClientPayload(config: ClientPayloadConfig): ClientPayloadType {
 
 /** Serialized `DeviceProps`, embedded inside `devicePairingData`. */
 export function buildDeviceProps(config: ClientPayloadConfig): Buffer {
-	const [browserName, , browserVersion] = config.browser
-	const [primary = 0, secondary = 0, tertiary = 0] = browserVersion.split('.').map(Number)
+	const [osLabel, browser] = config.browser
 
 	return DeviceProps.encode({
-		os: browserName,
-		version: { primary, secondary, tertiary },
-		platformType: PlatformType.CHROME,
+		os: osLabel,
+		version: COMPANION_VERSION,
+		platformType: platformTypeFor(browser),
 		requireFullSync: false,
+		historySyncConfig: {
+			storageQuotaMb: 10240,
+			inlineInitialPayloadInE2EeMsg: true,
+			supportCallLogHistory: false,
+			supportBotUserAgentChatHistory: true,
+			supportCagReactionsAndPolls: true,
+		},
 	})
 }
 
 /**
- * Registration payload — used while `creds.registered` is false.
+ * Registration payload — used while there is no account yet.
  * This is what makes the server start emitting QR code refs.
  */
 export function buildRegisterClientPayload(
 	creds: AuthenticationCreds,
 	config: ClientPayloadConfig,
 ): Buffer {
-	const appVersionBuf = createHash('md5').update(config.browser.join(' ')).digest()
+	// MD5 of the WhatsApp Web version, dotted — NOT of the browser string. The
+	// server checks it against the version in userAgent, and a mismatch fails
+	// the pairing rather than the connection, so the QR scans and then the phone
+	// says it cannot connect.
+	const buildHash = createHash('md5').update(config.version.join('.')).digest()
 
 	const payload: ClientPayloadType = {
 		...baseClientPayload(config),
 		passive: false,
+		pull: false,
 		devicePairingData: {
-			buildHash: appVersionBuf,
+			buildHash,
 			deviceProps: buildDeviceProps(config),
 			eRegid: encodeBigEndian(creds.registrationId),
 			// 5 = DJB_TYPE, libsignal's Curve25519 key type
@@ -124,6 +152,7 @@ export function buildLoginClientPayload(
 	const payload: ClientPayloadType = {
 		...baseClientPayload(config),
 		passive: true,
+		pull: true,
 		username: BigInt(decoded.user),
 		device: decoded.device ?? 0,
 	}
@@ -142,4 +171,3 @@ export function buildClientPayload(
 ): Buffer {
 	return creds.me?.id ? buildLoginClientPayload(creds, config) : buildRegisterClientPayload(creds, config)
 }
-
