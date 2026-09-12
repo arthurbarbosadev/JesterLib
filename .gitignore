@@ -5,3 +5,4 @@ dist/
 !.env.example
 auth_state/
 captures/
+auth.json

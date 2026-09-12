@@ -1,3 +1,5 @@
+import { VENDORED_TOKENS } from './tokens.generated.ts'
+
 /**
  * WABinary token dictionary.
  *
@@ -26,6 +28,33 @@ type LoadedDictionary = TokenDictionary & {
 }
 
 let loaded: LoadedDictionary | undefined
+/** Guards the one-time attempt to pick up the vendored table. */
+let vendoredTried = false
+
+/**
+ * Registers the vendored table the first time the dictionary is needed.
+ *
+ * This lives here, not in the module barrel, because nothing inside the library
+ * imports the barrel — `decode.ts` reaches for this module directly. Putting the
+ * auto-load anywhere else means it silently never runs, and the first real
+ * connection fails after a perfectly good handshake.
+ *
+ * The import is dynamic-free and safe: tokens.generated.ts only imports a *type*
+ * from here, so there is no runtime cycle.
+ */
+function loadVendored(): void {
+	// An explicit setTokenDictionary() wins — tests install a synthetic table on
+	// purpose, and overwriting it here would make them exercise the real one.
+	if (vendoredTried || loaded) {
+		return
+	}
+
+	vendoredTried = true
+
+	if (VENDORED_TOKENS.single.length > 1) {
+		setTokenDictionary(VENDORED_TOKENS)
+	}
+}
 
 export class MissingTokenDictionaryError extends Error {
 	constructor() {
@@ -68,10 +97,14 @@ export function setTokenDictionary(dict: TokenDictionary): void {
 }
 
 export function hasTokenDictionary(): boolean {
+	loadVendored()
+
 	return loaded !== undefined && loaded.single.length > 1
 }
 
 export function getTokenDictionary(): LoadedDictionary {
+	loadVendored()
+
 	if (!loaded || loaded.single.length <= 1) {
 		throw new MissingTokenDictionaryError()
 	}

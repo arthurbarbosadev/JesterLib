@@ -86,7 +86,14 @@ export type JesterSocketOptions = {
 	qrRefreshMs?: number
 }
 
-const DEFAULT_VERSION: [number, number, number] = [2, 3000, 1015901307]
+/**
+ * WhatsApp Web version advertised in the ClientPayload.
+ *
+ * This goes stale: WhatsApp ships new builds constantly and refuses connections
+ * from versions that are too far behind, with no useful error. If the handshake
+ * starts failing after working, check this first.
+ */
+const DEFAULT_VERSION: [number, number, number] = [2, 3000, 1043857760]
 
 /**
  * Connection to WhatsApp: handshake, framing and node routing.

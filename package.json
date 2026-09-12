@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types \"test/**/*.test.ts\"",
     "test:watch": "node --test --watch --experimental-strip-types \"test/**/*.test.ts\"",
-    "vendor:tokens": "node scripts/vendor-tokens.mjs"
+    "vendor:tokens": "node scripts/vendor-tokens.mjs",
+    "example:connect": "node --experimental-strip-types examples/connect.ts"
   },
   "keywords": [
     "whatsapp",
@@ -42,6 +43,8 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/ws": "^8.5.13",
+    "baileys": "^7.0.0-rc14",
+    "qrcode-terminal": "^0.12.0",
     "typescript": "^5.9.0"
   },
   "author": "Arthur Barbosa",
