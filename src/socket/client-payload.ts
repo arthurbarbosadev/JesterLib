@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { AuthenticationCreds } from '../auth/creds.ts'
 import { jidDecode } from '../binary/jid.ts'
-import { addKeyType } from '../crypto/index.ts'
 import {
 	ClientPayload,
 	ConnectReason,
@@ -144,5 +143,3 @@ export function buildClientPayload(
 	return creds.me?.id ? buildLoginClientPayload(creds, config) : buildRegisterClientPayload(creds, config)
 }
 
-/** Public key in libsignal format (33 bytes, prefixed with 0x05). */
-export { addKeyType as signalPublicKey }
