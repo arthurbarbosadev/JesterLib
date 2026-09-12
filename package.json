@@ -21,7 +21,8 @@
     "test": "node --test --experimental-strip-types \"test/**/*.test.ts\"",
     "test:watch": "node --test --watch --experimental-strip-types \"test/**/*.test.ts\"",
     "vendor:tokens": "node scripts/vendor-tokens.mjs",
-    "example:connect": "node --experimental-strip-types examples/connect.ts"
+    "example:connect": "node --experimental-strip-types examples/connect.ts",
+    "prepare": "npm run build"
   },
   "keywords": [
     "whatsapp",
