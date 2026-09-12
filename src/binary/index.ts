@@ -9,8 +9,8 @@ export * from './encode.ts'
 export * from './decode.ts'
 
 /**
- * Registra a tabela vendorizada. Se ainda for o placeholder, nada acontece
- * aqui — o erro só aparece (com instruções) na primeira codificação.
+ * Registers the vendored table. If it is still the placeholder, nothing
+ * happens here — the error surfaces (with instructions) on the first encode.
  */
 export function loadVendoredTokens(): boolean {
 	if (VENDORED_TOKENS.single.length <= 1) {

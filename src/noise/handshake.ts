@@ -3,25 +3,25 @@ import { CertChain, HandshakeMessage, NoiseCertificateDetails } from '../proto/w
 import type { NoiseHandler } from './handler.ts'
 
 /**
- * Driver do padrão Noise XX, lado cliente.
+ * Driver for the Noise XX pattern, client side.
  *
  *   -> e                          (ClientHello)
  *   <- e, ee, s, es               (ServerHello)
  *   -> s, se                      (ClientFinish + ClientPayload)
  *
- * Cada token da direita é um DH que entra na chave. A ordem importa: trocar
- * dois `mixIntoKey` produz chaves diferentes e o servidor só derruba a conexão,
- * sem dizer o motivo.
+ * Each token on the right is a DH that feeds into the key. Order matters:
+ * swapping two `mixIntoKey` calls produces different keys, and the server just
+ * drops the connection without saying why.
  */
 
-/** Serial esperado do emissor do certificado intermediário do WhatsApp. */
+/** Expected issuer serial of WhatsApp's intermediate certificate. */
 const EXPECTED_ISSUER_SERIAL = 0
 
 export type HandshakeContext = {
 	noise: NoiseHandler
-	/** Par efêmero desta conexão — descartado ao final. */
+	/** This connection's ephemeral key pair — discarded at the end. */
 	ephemeral: KeyPair
-	/** Par estático persistido nas credenciais (`creds.noiseKey`). */
+	/** Static key pair persisted in the credentials (`creds.noiseKey`). */
 	staticKey: KeyPair
 }
 
@@ -32,42 +32,42 @@ export class HandshakeError extends Error {
 	}
 }
 
-/** Mensagem 1: `-> e`. O hash já absorveu a efêmera no construtor do handler. */
+/** Message 1: `-> e`. The hash already absorbed the ephemeral key in the handler's constructor. */
 export function createClientHello(ephemeral: KeyPair): Buffer {
 	return HandshakeMessage.encode({ clientHello: { ephemeral: ephemeral.public } })
 }
 
 /**
- * Valida a cadeia de certificados enviada pelo servidor.
+ * Validates the certificate chain sent by the server.
  *
- * Atenção: isto confere apenas o serial do emissor, que é o mesmo que as
- * implementações de referência fazem. A verificação criptográfica da assinatura
- * contra a chave raiz do WhatsApp NÃO é feita aqui — em uma rede hostil isso
- * deixaria espaço para MITM. Está isolado nesta função para poder ser
- * endurecido sem tocar no resto do handshake.
+ * Note: this only checks the issuer serial, which is what the reference
+ * implementations do as well. The cryptographic verification of the signature
+ * against WhatsApp's root key is NOT performed here — on a hostile network that
+ * would leave room for MITM. It is isolated in this function so it can be
+ * hardened without touching the rest of the handshake.
  */
 export function validateServerCertificate(certPayload: Buffer): void {
 	const chain = CertChain.decode(certPayload)
 	const intermediate = chain.intermediate
 
 	if (!intermediate?.details) {
-		throw new HandshakeError('cadeia de certificados sem certificado intermediário')
+		throw new HandshakeError('certificate chain has no intermediate certificate')
 	}
 
 	const details = NoiseCertificateDetails.decode(intermediate.details)
 
 	if (details.issuerSerial !== EXPECTED_ISSUER_SERIAL) {
 		throw new HandshakeError(
-			`serial do emissor inesperado: ${details.issuerSerial} (esperado ${EXPECTED_ISSUER_SERIAL})`,
+			`unexpected issuer serial: ${details.issuerSerial} (expected ${EXPECTED_ISSUER_SERIAL})`,
 		)
 	}
 }
 
 /**
- * Mensagens 2 e 3: consome o ServerHello e devolve o frame do ClientFinish.
+ * Messages 2 and 3: consumes the ServerHello and returns the ClientFinish frame.
  *
- * Ao retornar, o canal já está em modo transporte (`finishInit` foi chamado) e
- * todo tráfego seguinte é WABinary cifrado.
+ * On return the channel is already in transport mode (`finishInit` has been
+ * called) and all following traffic is encrypted WABinary.
  */
 export function completeHandshake(
 	ctx: HandshakeContext,
@@ -79,32 +79,32 @@ export function completeHandshake(
 	const { serverHello } = HandshakeMessage.decode(serverHelloFrame)
 
 	if (!serverHello?.ephemeral || !serverHello.static || !serverHello.payload) {
-		throw new HandshakeError('ServerHello incompleto — o servidor rejeitou o ClientHello?')
+		throw new HandshakeError('incomplete ServerHello — did the server reject the ClientHello?')
 	}
 
 	// <- e
 	noise.authenticate(serverHello.ephemeral)
 
-	// ee: efêmera do cliente x efêmera do servidor
+	// ee: client ephemeral x server ephemeral
 	noise.mixIntoKey(Curve.sharedKey(ephemeral.private, serverHello.ephemeral))
 
-	// s: a estática do servidor vem cifrada com a chave derivada de `ee`
+	// s: the server's static key arrives encrypted under the key derived from `ee`
 	const serverStatic = noise.decrypt(serverHello.static)
 
-	// es: efêmera do cliente x estática do servidor
+	// es: client ephemeral x server static
 	noise.mixIntoKey(Curve.sharedKey(ephemeral.private, serverStatic))
 
-	// O payload do ServerHello é a cadeia de certificados
+	// The ServerHello payload is the certificate chain
 	const certPayload = noise.decrypt(serverHello.payload)
 
 	if (opts.validateCertificate !== false) {
 		validateServerCertificate(certPayload)
 	}
 
-	// -> s: a estática do cliente, cifrada
+	// -> s: the client's static key, encrypted
 	const encryptedStatic = noise.encrypt(staticKey.public)
 
-	// se: estática do cliente x efêmera do servidor
+	// se: client static x server ephemeral
 	noise.mixIntoKey(Curve.sharedKey(staticKey.private, serverHello.ephemeral))
 
 	const encryptedPayload = noise.encrypt(clientPayload)

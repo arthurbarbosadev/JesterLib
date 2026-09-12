@@ -1,9 +1,9 @@
 /**
- * Tags do WABinary — o "XML binário" do WhatsApp.
+ * WABinary tags — WhatsApp's "binary XML".
  *
- * O stream é uma sequência de valores auto-descritos: cada um começa por um
- * byte de tag que diz como ler o resto. Valores de 1..len(SINGLE_BYTE_TOKENS)
- * são tokens do dicionário; os valores abaixo são os tipos estruturais.
+ * The stream is a sequence of self-describing values: each one starts with a
+ * tag byte that says how to read the rest. Values from 1..len(SINGLE_BYTE_TOKENS)
+ * are dictionary tokens; the values below are the structural types.
  */
 export const TAGS = {
 	LIST_EMPTY: 0,
@@ -23,16 +23,16 @@ export const TAGS = {
 	NIBBLE_8: 255,
 } as const
 
-/** Strings empacotadas (nibble/hex) não passam de 127 caracteres. */
+/** Packed strings (nibble/hex) never exceed 127 characters. */
 export const PACKED_MAX_LENGTH = 127
 
-/** Valor de nibble usado como preenchimento quando a string tem tamanho ímpar. */
+/** Nibble value used as padding when the string has an odd length. */
 export const PACKED_PAD = 15
 
 export const NIBBLE_CHARS = '0123456789-.'
 export const HEX_CHARS = '0123456789ABCDEF'
 
-/** Domínios que aparecem como `server` em um JID. */
+/** Domains that appear as the `server` part of a JID. */
 export const S_WHATSAPP_NET = 's.whatsapp.net'
 export const GROUP_SERVER = 'g.us'
 export const BROADCAST_SERVER = 'broadcast'
@@ -42,7 +42,8 @@ export const CALL_SERVER = 'call'
 export const STATUS_BROADCAST = 'status@broadcast'
 
 /**
- * `domainType` do AD_JID: identifica o servidor sem gastar bytes com a string.
+ * AD_JID's `domainType`: identifies the server without spending bytes on the
+ * string.
  */
 export const DOMAIN_TYPE = {
 	WHATSAPP: 0,

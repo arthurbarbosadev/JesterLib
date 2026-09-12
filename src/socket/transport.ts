@@ -2,14 +2,14 @@ import { EventEmitter } from 'node:events'
 import WebSocket from 'ws'
 
 /**
- * Camada de transporte, abstraída do WebSocket.
+ * Transport layer, abstracted away from the WebSocket.
  *
- * Não é abstração gratuita: com ela a conexão inteira — handshake, framing,
- * roteamento de nós — pode ser exercitada contra um servidor simulado em
- * processo, sem rede. Isso é o que torna testável a parte que normalmente só se
- * depura em produção.
+ * This is not abstraction for its own sake: it lets the entire connection —
+ * handshake, framing, node routing — be exercised against an in-process
+ * simulated server, with no network. That makes testable the part that is
+ * normally only debuggable in production.
  *
- * Eventos: `open`, `data` (Buffer), `close` (code, reason), `error` (Error).
+ * Events: `open`, `data` (Buffer), `close` (code, reason), `error` (Error).
  */
 export interface Transport extends EventEmitter {
 	send(data: Buffer): void
@@ -55,8 +55,8 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions = {}): 
 }
 
 /**
- * Par de transportes ligados em memória, para testes.
- * O que um envia, o outro recebe como `data`.
+ * A pair of in-memory linked transports, for tests.
+ * Whatever one sends, the other receives as `data`.
  */
 export function createLinkedTransports(): [Transport, Transport] {
 	const make = () => {
@@ -72,7 +72,7 @@ export function createLinkedTransports(): [Transport, Transport] {
 	const wire = (self: typeof a, other: typeof b) => {
 		self.send = (data: Buffer) => {
 			if (self.open && other.open) {
-				// assíncrono, como um socket de verdade
+				// asynchronous, like a real socket
 				queueMicrotask(() => other.emit('data', Buffer.from(data)))
 			}
 		}
@@ -84,11 +84,11 @@ export function createLinkedTransports(): [Transport, Transport] {
 
 			self.open = false
 			queueMicrotask(() => {
-				self.emit('close', 1000, 'fechado')
+				self.emit('close', 1000, 'closed')
 
 				if (other.open) {
 					other.open = false
-					other.emit('close', 1000, 'par fechou')
+					other.emit('close', 1000, 'peer closed')
 				}
 			})
 		}

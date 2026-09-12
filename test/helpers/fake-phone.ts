@@ -7,13 +7,13 @@ import {
 } from '../../src/proto/wa.ts'
 
 /**
- * O celular que lê o QR.
+ * The phone that scans the QR.
  *
- * Faz exatamente o que o aparelho faz no `<pair-success>`: assina a identidade
- * do dispositivo novo com a chave da conta, e depois confere a contra-assinatura
- * que o cliente devolve. Testar contra isto exercita as três verificações do
- * pareamento de verdade, inclusive os prefixos [6,0] / [6,1] — errar um deles
- * passa despercebido em qualquer teste que não reproduza o outro lado.
+ * It does exactly what the handset does during `<pair-success>`: signs the new
+ * device's identity with the account key, then checks the counter-signature the
+ * client sends back. Testing against this exercises all three pairing checks for
+ * real, including the [6,0] / [6,1] prefixes — getting one of those wrong goes
+ * unnoticed in any test that does not reproduce the other side.
  */
 
 const ACCOUNT_SIGNATURE_PREFIX = Buffer.from([6, 0])
@@ -22,18 +22,18 @@ const DEVICE_SIGNATURE_PREFIX = Buffer.from([6, 1])
 export type FakePhone = {
 	accountKey: KeyPair
 	jid: string
-	/** Constrói o conteúdo do `<device-identity>` para o `<pair-success>`. */
+	/** Builds the `<device-identity>` content for a `<pair-success>`. */
 	buildPairSuccess(opts: {
 		stanzaId: string
-		/** Chave de identidade do cliente, lida do QR. */
+		/** The client's identity key, read from the QR. */
 		clientIdentityPublic: Buffer
-		/** advSecretKey do cliente, lido do QR (base64). */
+		/** The client's advSecretKey, read from the QR (base64). */
 		advSecretKey: string
 		keyIndex?: number
 	}): BinaryNode
-	/** Valida o `<pair-device-sign>` devolvido pelo cliente. */
+	/** Validates the `<pair-device-sign>` returned by the client. */
 	verifyDeviceSignature(reply: BinaryNode, clientIdentityPublic: Buffer): boolean
-	/** `deviceDetails` usado na última chamada — para asserções finas. */
+	/** The `deviceDetails` used in the last call — for fine-grained assertions. */
 	lastDeviceDetails(): Buffer | undefined
 }
 
@@ -60,8 +60,8 @@ export function makeFakePhone(jid = '5511987654321:12@s.whatsapp.net'): FakePhon
 				Buffer.concat([ACCOUNT_SIGNATURE_PREFIX, deviceDetails, clientIdentityPublic]),
 			)
 
-			// A camada externa (o que o HMAC cobre) é a ADVSignedDeviceIdentity
-			// serializada — não o ADVDeviceIdentity de dentro dela.
+			// The outer layer (what the HMAC covers) is the serialized
+			// ADVSignedDeviceIdentity — not the ADVDeviceIdentity nested inside it.
 			const signedIdentity = ADVSignedDeviceIdentity.encode({
 				details: deviceDetails,
 				accountSignatureKey: accountKey.public,
@@ -84,7 +84,7 @@ export function makeFakePhone(jid = '5511987654321:12@s.whatsapp.net'): FakePhon
 							{ tag: 'device-identity', attrs: {}, content },
 							{ tag: 'device', attrs: { jid, lid: '998877:12@lid' } },
 							{ tag: 'platform', attrs: { name: 'android' } },
-							{ tag: 'biz', attrs: { name: 'Loja do Arthur' } },
+							{ tag: 'biz', attrs: { name: 'Arthur Store' } },
 						],
 					},
 				],

@@ -20,8 +20,9 @@ export function hmacSha256(data: Buffer, key: Buffer): Buffer {
 }
 
 /**
- * HKDF-SHA256 (RFC 5869) — extract + expand em uma chamada.
- * O handshake Noise usa salt variável e `info` vazio; a mídia usa o contrário.
+ * HKDF-SHA256 (RFC 5869) — extract + expand in one call.
+ * The Noise handshake uses a varying salt and an empty `info`; media does the
+ * opposite.
  */
 export function hkdf(ikm: Buffer, length: number, opts: { salt?: Buffer; info?: string | Buffer } = {}): Buffer {
 	const salt = opts.salt ?? Buffer.alloc(0)
@@ -41,7 +42,7 @@ export function aesEncryptGCM(plaintext: Buffer, key: Buffer, iv: Buffer, additi
 
 export function aesDecryptGCM(ciphertext: Buffer, key: Buffer, iv: Buffer, additionalData: Buffer): Buffer {
 	if (ciphertext.length < GCM_TAG_LENGTH) {
-		throw new Error('ciphertext menor que o tag GCM')
+		throw new Error('ciphertext is shorter than the GCM tag')
 	}
 
 	const body = ciphertext.subarray(0, ciphertext.length - GCM_TAG_LENGTH)

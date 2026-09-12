@@ -9,11 +9,11 @@ import { CertChain, HandshakeMessage, NoiseCertificateDetails } from '../src/pro
 const PROLOGUE = makeWaHeader(3)
 
 /**
- * Servidor Noise XX simulado.
+ * Simulated Noise XX server.
  *
- * Vale mais que um vetor fixo: se o cliente errar a ORDEM dos DH, ou o
- * compartilhamento de contador durante o handshake, ou o split final, os dois
- * lados derivam chaves diferentes e a troca de mensagens abaixo falha.
+ * Worth more than a fixed vector: if the client gets the DH ORDER wrong, or the
+ * shared counter during the handshake, or the final split, the two sides derive
+ * different keys and the message exchange below fails.
  */
 function makeFakeServer(opts: { issuerSerial?: number } = {}) {
 	const ephemeral = Curve.generateKeyPair()
@@ -25,14 +25,14 @@ function makeFakeServer(opts: { issuerSerial?: number } = {}) {
 		ephemeral,
 		staticKey,
 
-		/** Consome o ClientHello e devolve o frame do ServerHello. */
+		/** Consumes the ClientHello and returns the ServerHello frame. */
 		respond(clientHelloFrame: Buffer): Buffer {
 			const { clientHello } = HandshakeMessage.decode(clientHelloFrame)
 			const clientEphemeral = clientHello?.ephemeral
 
-			assert.ok(clientEphemeral, 'ClientHello sem chave efêmera')
+			assert.ok(clientEphemeral, 'ClientHello has no ephemeral key')
 
-			// O servidor absorve a efêmera DO CLIENTE, igual ao cliente.
+			// The server absorbs the CLIENT's ephemeral key, same as the client.
 			noise = new NoiseHandler({
 				ephemeralPublic: clientEphemeral,
 				prologue: PROLOGUE,
@@ -64,7 +64,7 @@ function makeFakeServer(opts: { issuerSerial?: number } = {}) {
 			})
 		},
 
-		/** Consome o ClientFinish e devolve o ClientPayload em claro. */
+		/** Consumes the ClientFinish and returns the plaintext ClientPayload. */
 		finish(clientFinishFrame: Buffer): Buffer {
 			const { clientFinish } = HandshakeMessage.decode(clientFinishFrame)
 
@@ -91,20 +91,20 @@ function makeClient() {
 	return { ephemeral, staticKey, noise }
 }
 
-test('handshake XX completo: os dois lados derivam o mesmo canal', () => {
+test('full XX handshake: both sides derive the same channel', () => {
 	const client = makeClient()
 	const server = makeFakeServer()
 
 	const clientHello = createClientHello(client.ephemeral)
 	const serverHello = server.respond(clientHello)
 
-	const payload = Buffer.from('ClientPayload simulado')
+	const payload = Buffer.from('simulated ClientPayload')
 	const clientFinish = completeHandshake(client, serverHello, payload)
 
 	assert.deepEqual(server.finish(clientFinish), payload)
 	assert.equal(client.noise.isHandshakeFinished, true)
 
-	// Chave de escrita de um lado == chave de leitura do outro.
+	// One side's write key == the other side's read key.
 	const c = client.noise.debugState()
 	const s = server.noise().debugState()
 
@@ -113,7 +113,7 @@ test('handshake XX completo: os dois lados derivam o mesmo canal', () => {
 	assert.equal(c.hash, '')
 })
 
-test('após o handshake o canal transporta mensagens nos dois sentidos', () => {
+test('after the handshake the channel carries messages both ways', () => {
 	const client = makeClient()
 	const server = makeFakeServer()
 
@@ -123,19 +123,19 @@ test('após o handshake o canal transporta mensagens nos dois sentidos', () => {
 	const clientNoise = client.noise
 	const serverNoise = server.noise()
 
-	// Várias mensagens seguidas: valida que os contadores avançam em sincronia.
+	// Several messages in a row: checks the counters advance in lockstep.
 	for (let i = 0; i < 5; i++) {
-		const msg = Buffer.from(`cliente -> servidor #${i}`)
+		const msg = Buffer.from(`client -> server #${i}`)
 		assert.deepEqual(serverNoise.decrypt(clientNoise.encrypt(msg)), msg)
 	}
 
 	for (let i = 0; i < 5; i++) {
-		const msg = Buffer.from(`servidor -> cliente #${i}`)
+		const msg = Buffer.from(`server -> client #${i}`)
 		assert.deepEqual(clientNoise.decrypt(serverNoise.encrypt(msg)), msg)
 	}
 })
 
-test('certificado com serial de emissor errado é rejeitado', () => {
+test('a certificate with the wrong issuer serial is rejected', () => {
 	const client = makeClient()
 	const server = makeFakeServer({ issuerSerial: 99 })
 	const serverHello = server.respond(createClientHello(client.ephemeral))
@@ -143,19 +143,19 @@ test('certificado com serial de emissor errado é rejeitado', () => {
 	assert.throws(() => completeHandshake(client, serverHello, Buffer.from('x')), HandshakeError)
 })
 
-test('ServerHello incompleto falha com erro claro', () => {
+test('an incomplete ServerHello fails with a clear error', () => {
 	const client = makeClient()
 	const bogus = HandshakeMessage.encode({ serverHello: { ephemeral: Buffer.alloc(32) } })
 
 	assert.throws(() => completeHandshake(client, bogus, Buffer.from('x')), HandshakeError)
 })
 
-test('ServerHello adulterado quebra a autenticação GCM', () => {
+test('a tampered ServerHello breaks GCM authentication', () => {
 	const client = makeClient()
 	const server = makeFakeServer()
 	const serverHello = server.respond(createClientHello(client.ephemeral))
 
-	// vira um bit no meio do frame
+	// flip a bit in the middle of the frame
 	const tampered = Buffer.from(serverHello)
 	const mid = Math.floor(tampered.length / 2)
 	tampered.writeUInt8(tampered.readUInt8(mid) ^ 0x01, mid)
@@ -167,7 +167,7 @@ test('ServerHello adulterado quebra a autenticação GCM', () => {
 // Framing
 // ---------------------------------------------------------------------------
 
-test('encodeFrame escreve o tamanho em 3 bytes big-endian', () => {
+test('encodeFrame writes the length as 3 big-endian bytes', () => {
 	const frame = encodeFrame(Buffer.alloc(300, 1))
 
 	assert.equal(frame.readUInt8(0), 0)
@@ -175,13 +175,13 @@ test('encodeFrame escreve o tamanho em 3 bytes big-endian', () => {
 	assert.equal(frame.length, 303)
 })
 
-test('FrameDecoder remonta frames partidos entre chunks', () => {
-	const payloads = [Buffer.from('um'), Buffer.alloc(500, 7), Buffer.from('tres')]
+test('FrameDecoder reassembles frames split across chunks', () => {
+	const payloads = [Buffer.from('one'), Buffer.alloc(500, 7), Buffer.from('three')]
 	const stream = Buffer.concat(payloads.map(p => encodeFrame(p)))
 	const decoder = new FrameDecoder()
 	const out: Buffer[] = []
 
-	// Alimenta 7 bytes por vez — nenhum frame chega inteiro de uma vez.
+	// Feed 7 bytes at a time — no frame ever arrives whole.
 	for (let i = 0; i < stream.length; i += 7) {
 		out.push(...decoder.push(stream.subarray(i, i + 7)))
 	}
@@ -190,13 +190,13 @@ test('FrameDecoder remonta frames partidos entre chunks', () => {
 	assert.deepEqual(out, payloads)
 })
 
-test('FrameDecoder entrega vários frames de um chunk só', () => {
+test('FrameDecoder yields several frames from a single chunk', () => {
 	const stream = Buffer.concat([encodeFrame(Buffer.from('a')), encodeFrame(Buffer.from('b'))])
 
 	assert.deepEqual(new FrameDecoder().push(stream), [Buffer.from('a'), Buffer.from('b')])
 })
 
-test('FrameDecoder segura frame incompleto sem emitir', () => {
+test('FrameDecoder holds an incomplete frame without emitting', () => {
 	const decoder = new FrameDecoder()
 	const frame = encodeFrame(Buffer.alloc(100, 9))
 
@@ -205,12 +205,12 @@ test('FrameDecoder segura frame incompleto sem emitir', () => {
 	assert.deepEqual(decoder.push(frame.subarray(50)), [Buffer.alloc(100, 9)])
 })
 
-test('intro sem routing info é só o header WA', () => {
+test('an intro without routing info is just the WA header', () => {
 	assert.deepEqual(buildIntro(PROLOGUE), PROLOGUE)
 	assert.deepEqual([...PROLOGUE.subarray(0, 2)], [87, 65]) // 'W', 'A'
 })
 
-test('intro com routing info ganha o cabeçalho ED', () => {
+test('an intro with routing info gains the ED header', () => {
 	const routing = Buffer.from([0xaa, 0xbb, 0xcc])
 	const intro = buildIntro(PROLOGUE, routing)
 
@@ -223,7 +223,7 @@ test('intro com routing info ganha o cabeçalho ED', () => {
 	assert.equal(intro.length, 7 + routing.length + PROLOGUE.length)
 })
 
-test('primeiro frame carrega o intro antes do tamanho', () => {
+test('the first frame carries the intro before the length', () => {
 	const intro = buildIntro(PROLOGUE)
 	const frame = encodeFrame(Buffer.from('oi'), intro)
 

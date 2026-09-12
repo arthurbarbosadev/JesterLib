@@ -1,22 +1,22 @@
 /**
- * Framing do WhatsApp: cada mensagem no WebSocket é precedida por um tamanho
- * big-endian de 3 bytes (máximo ~16 MiB). Um único `message` do WebSocket pode
- * conter vários frames, ou metade de um — por isso a decodificação é streaming.
+ * WhatsApp framing: every message on the WebSocket is preceded by a 3-byte
+ * big-endian length (max ~16 MiB). A single WebSocket `message` may carry
+ * several frames, or half of one — which is why decoding is streaming.
  */
 
 const LENGTH_PREFIX_SIZE = 3
 const MAX_FRAME_SIZE = (1 << 24) - 1
 
 /**
- * O primeiro frame da conexão é precedido pelo intro. Com routing info, ele
- * ganha um cabeçalho 'ED' que diz ao edge para qual shard encaminhar.
+ * The first frame of the connection is preceded by the intro. With routing
+ * info, it gains an 'ED' header telling the edge which shard to forward to.
  */
 export function buildIntro(waHeader: Buffer, routingInfo?: Buffer): Buffer {
 	if (!routingInfo?.length) {
 		return waHeader
 	}
 
-	// 'E','D', versão (0), tipo (1), e 3 bytes de tamanho = 7
+	// 'E', 'D', version (0), type (1), and 3 length bytes = 7
 	const routingHeader = Buffer.alloc(7)
 	routingHeader.write('ED', 0, 'utf-8')
 	routingHeader.writeUInt8(0, 2)
@@ -29,7 +29,7 @@ export function buildIntro(waHeader: Buffer, routingInfo?: Buffer): Buffer {
 
 export function encodeFrame(payload: Buffer, intro?: Buffer): Buffer {
 	if (payload.length > MAX_FRAME_SIZE) {
-		throw new Error(`frame de ${payload.length} bytes excede o máximo de ${MAX_FRAME_SIZE}`)
+		throw new Error(`frame of ${payload.length} bytes exceeds the maximum of ${MAX_FRAME_SIZE}`)
 	}
 
 	const introSize = intro?.length ?? 0
@@ -46,7 +46,7 @@ export function encodeFrame(payload: Buffer, intro?: Buffer): Buffer {
 	return frame
 }
 
-/** Reassembla frames completos a partir de chunks arbitrários do socket. */
+/** Reassembles complete frames out of arbitrary chunks from the socket. */
 export class FrameDecoder {
 	private buffered: Buffer = Buffer.alloc(0)
 
@@ -69,7 +69,7 @@ export class FrameDecoder {
 		return frames
 	}
 
-	/** Bytes recebidos que ainda não formam um frame completo. */
+	/** Bytes received that do not yet form a complete frame. */
 	get pending(): number {
 		return this.buffered.length
 	}

@@ -15,20 +15,20 @@ import {
 } from '../proto/wa.ts'
 
 /**
- * O ClientPayload é a primeira coisa que o servidor lê sobre você — vai cifrado
- * dentro do ClientFinish. Existem duas formas:
+ * The ClientPayload is the first thing the server learns about you — it travels
+ * encrypted inside the ClientFinish. There are two shapes:
  *
- * - registro: sem conta ainda, carrega `devicePairingData` e pede o QR;
- * - login: já pareado, identifica a conta por `username` + `device`.
+ * - register: no account yet, carries `devicePairingData` and asks for the QR;
+ * - login: already paired, identifies the account by `username` + `device`.
  *
- * Campos "cosméticos" (versão de SO, fabricante) não são cosméticos: eles
- * compõem o que o celular mostra na lista de dispositivos conectados.
+ * The "cosmetic" fields (OS version, manufacturer) are not cosmetic: they make
+ * up what the phone shows in its list of linked devices.
  */
 
 export type ClientPayloadConfig = {
-	/** Versão do WhatsApp Web. Defasada demais e o servidor recusa a conexão. */
+	/** WhatsApp Web version. Too far behind and the server refuses the connection. */
 	version: [number, number, number]
-	/** [navegador, sistema, versão] — aparece na lista de aparelhos do celular. */
+	/** [browser, os, version] — shown in the phone's linked-devices list. */
 	browser: [string, string, string]
 	countryCode?: string
 	languageCode?: string
@@ -69,7 +69,7 @@ function baseClientPayload(config: ClientPayloadConfig): ClientPayloadType {
 	}
 }
 
-/** `DeviceProps` serializado, embutido dentro de `devicePairingData`. */
+/** Serialized `DeviceProps`, embedded inside `devicePairingData`. */
 export function buildDeviceProps(config: ClientPayloadConfig): Buffer {
 	const [browserName, , browserVersion] = config.browser
 	const [primary = 0, secondary = 0, tertiary = 0] = browserVersion.split('.').map(Number)
@@ -83,8 +83,8 @@ export function buildDeviceProps(config: ClientPayloadConfig): Buffer {
 }
 
 /**
- * Payload de registro — usado enquanto `creds.registered` é false.
- * É ele que faz o servidor começar a emitir os refs do QR code.
+ * Registration payload — used while `creds.registered` is false.
+ * This is what makes the server start emitting QR code refs.
  */
 export function buildRegisterClientPayload(
 	creds: AuthenticationCreds,
@@ -99,7 +99,7 @@ export function buildRegisterClientPayload(
 			buildHash: appVersionBuf,
 			deviceProps: buildDeviceProps(config),
 			eRegid: encodeBigEndian(creds.registrationId),
-			// 5 = DJB_TYPE, o tipo de chave do Curve25519 no libsignal
+			// 5 = DJB_TYPE, libsignal's Curve25519 key type
 			eKeytype: Buffer.from([5]),
 			eIdent: creds.signedIdentityKey.public,
 			eSkeyId: encodeBigEndian(creds.signedPreKey.keyId, 3),
@@ -111,7 +111,7 @@ export function buildRegisterClientPayload(
 	return ClientPayload.encode(payload)
 }
 
-/** Payload de login — usado quando já existe `creds.me`. */
+/** Login payload — used once `creds.me` exists. */
 export function buildLoginClientPayload(
 	creds: AuthenticationCreds,
 	config: ClientPayloadConfig,
@@ -119,7 +119,7 @@ export function buildLoginClientPayload(
 	const decoded = jidDecode(creds.me?.id)
 
 	if (!decoded?.user) {
-		throw new Error('credenciais sem `me.id`: não dá para montar o payload de login')
+		throw new Error('credentials have no `me.id`: cannot build the login payload')
 	}
 
 	const payload: ClientPayloadType = {
@@ -133,9 +133,9 @@ export function buildLoginClientPayload(
 }
 
 /**
- * A escolha é feita por `me.id`, não por `registered`: `me` é o que o protocolo
- * de fato exige para logar, e credenciais restauradas de um formato antigo (sem
- * o flag) entrariam em loop de QR eternamente.
+ * The choice is driven by `me.id`, not `registered`: `me` is what the protocol
+ * actually requires to log in, and credentials restored from an older format
+ * (without the flag) would loop on the QR forever.
  */
 export function buildClientPayload(
 	creds: AuthenticationCreds,
@@ -144,5 +144,5 @@ export function buildClientPayload(
 	return creds.me?.id ? buildLoginClientPayload(creds, config) : buildRegisterClientPayload(creds, config)
 }
 
-/** Chave pública no formato do libsignal (33 bytes, prefixada com 0x05). */
+/** Public key in libsignal format (33 bytes, prefixed with 0x05). */
 export { addKeyType as signalPublicKey }

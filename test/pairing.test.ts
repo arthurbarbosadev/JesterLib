@@ -61,10 +61,10 @@ function pairDeviceNode(id: string, refs: string[]): BinaryNode {
 }
 
 // ---------------------------------------------------------------------------
-// Unidade
+// Unit
 // ---------------------------------------------------------------------------
 
-test('QR carrega ref e as três chaves, separados por vírgula', () => {
+test('the QR carries the ref and the three keys, comma separated', () => {
 	const creds = initAuthCreds()
 	const parts = buildQrString('REF123', creds).split(',')
 
@@ -75,12 +75,12 @@ test('QR carrega ref e as três chaves, separados por vírgula', () => {
 	assert.equal(parts[3], creds.advSecretKey)
 })
 
-test('extractPairingRefs preserva a ordem dos refs', () => {
+test('extractPairingRefs preserves the ref order', () => {
 	assert.deepEqual(extractPairingRefs(pairDeviceNode('1', ['a', 'b', 'c'])), ['a', 'b', 'c'])
 	assert.throws(() => extractPairingRefs({ tag: 'iq', attrs: {} }), PairingError)
 })
 
-test('pareamento válido produz resposta e atualização de credenciais', () => {
+test('a valid pairing produces a reply and a credentials update', () => {
 	const creds = initAuthCreds()
 	const phone = makeFakePhone()
 
@@ -93,11 +93,11 @@ test('pareamento válido produz resposta e atualização de credenciais', () => 
 
 	const { reply, update } = configureSuccessfulPairing(stanza, creds)
 
-	// a contra-assinatura tem que convencer o celular
+	// the counter-signature has to convince the phone
 	assert.equal(
 		phone.verifyDeviceSignature(reply, creds.signedIdentityKey.public),
 		true,
-		'assinatura do dispositivo não validou no celular',
+		'the device signature did not validate on the phone',
 	)
 
 	assert.equal(reply.tag, 'iq')
@@ -110,57 +110,57 @@ test('pareamento válido produz resposta e atualização de credenciais', () => 
 	const identity = (sign.content as BinaryNode[])[0]!
 	assert.equal(identity.attrs['key-index'], '3')
 
-	// a chave da conta NÃO volta para o servidor
+	// the account key must NOT go back to the server
 	const sent = ADVSignedDeviceIdentity.decode(identity.content as Buffer)
-	assert.equal(sent.accountSignatureKey, undefined, 'accountSignatureKey não deveria ser reenviada')
+	assert.equal(sent.accountSignatureKey, undefined, 'accountSignatureKey should not be sent back')
 	assert.ok(sent.deviceSignature)
 
 	assert.equal(update.me?.id, phone.jid)
 	assert.equal(update.me?.lid, '998877:12@lid')
-	assert.equal(update.me?.name, 'Loja do Arthur')
+	assert.equal(update.me?.name, 'Arthur Store')
 	assert.equal(update.platform, 'android')
 	assert.equal(update.registered, true)
 	assert.equal(update.signalIdentities?.length, 1)
 	assert.equal(update.signalIdentities?.[0]?.identifier.name, phone.jid)
-	assert.equal(update.signalIdentities?.[0]?.identifierKey.length, 33, 'identifierKey precisa do byte 0x05')
+	assert.equal(update.signalIdentities?.[0]?.identifierKey.length, 33, 'identifierKey needs the 0x05 byte')
 
-	// as credenciais guardam a identidade COM a chave da conta
+	// the credentials keep the identity WITH the account key
 	const stored = ADVSignedDeviceIdentity.decode(update.account!)
 	assert.deepEqual(stored.accountSignatureKey, phone.accountKey.public)
 })
 
-test('HMAC errado é rejeitado (QR de outro dispositivo)', () => {
+test('a wrong HMAC is rejected (QR from another device)', () => {
 	const creds = initAuthCreds()
-	const outro = initAuthCreds()
+	const other = initAuthCreds()
 	const phone = makeFakePhone()
 
-	// o celular usou o segredo de OUTRO dispositivo
+	// the phone used ANOTHER device's secret
 	const stanza = phone.buildPairSuccess({
 		stanzaId: 'abc',
 		clientIdentityPublic: creds.signedIdentityKey.public,
-		advSecretKey: outro.advSecretKey,
+		advSecretKey: other.advSecretKey,
 	})
 
-	assert.throws(() => configureSuccessfulPairing(stanza, creds), /HMAC da identidade não confere/)
+	assert.throws(() => configureSuccessfulPairing(stanza, creds), /identity HMAC mismatch/)
 })
 
-test('assinatura da conta sobre outra identidade é rejeitada', () => {
+test('an account signature over a different identity is rejected', () => {
 	const creds = initAuthCreds()
 	const impostor = initAuthCreds()
 	const phone = makeFakePhone()
 
-	// A conta autorizou o dispositivo do impostor, mas o HMAC é do nosso —
-	// simula alguém tentando reaproveitar uma autorização alheia.
+	// The account authorized the impostor's device but the HMAC is ours —
+	// simulates someone trying to reuse somebody else's authorization.
 	const stanza = phone.buildPairSuccess({
 		stanzaId: 'abc',
 		clientIdentityPublic: impostor.signedIdentityKey.public,
 		advSecretKey: creds.advSecretKey,
 	})
 
-	assert.throws(() => configureSuccessfulPairing(stanza, creds), /assinatura da conta inválida/)
+	assert.throws(() => configureSuccessfulPairing(stanza, creds), /invalid account signature/)
 })
 
-test('pair-success malformado falha com PairingError', () => {
+test('a malformed pair-success fails with a PairingError', () => {
 	const creds = initAuthCreds()
 
 	assert.throws(
@@ -174,15 +174,15 @@ test('pair-success malformado falha com PairingError', () => {
 				{ tag: 'iq', attrs: {}, content: [{ tag: 'pair-success', attrs: {} }] },
 				creds,
 			),
-		/sem id/,
+		/has no id/,
 	)
 })
 
 // ---------------------------------------------------------------------------
-// Fluxo completo sobre a conexão
+// Full flow over the connection
 // ---------------------------------------------------------------------------
 
-test('fluxo ponta a ponta: QR emitido, celular pareia, cliente contra-assina', async () => {
+test('end to end: QR emitted, phone pairs, client counter-signs', async () => {
 	const [clientTransport, serverTransport] = createLinkedTransports()
 	const server = attachFakeServer(serverTransport, { sendSuccessOnConnect: false })
 	const auth = makeAuth()
@@ -197,7 +197,7 @@ test('fluxo ponta a ponta: QR emitido, celular pareia, cliente contra-assina', a
 	await socket.connect()
 	await server.ready()
 
-	// O servidor manda os refs; o cliente deve ACKar e publicar o primeiro QR.
+	// The server sends the refs; the client must ACK and publish the first QR.
 	const qrEmitted = new Promise<string>(resolve => {
 		socket.on('connection.update', u => {
 			if (u.qr) {
@@ -214,13 +214,13 @@ test('fluxo ponta a ponta: QR emitido, celular pareia, cliente contra-assina', a
 	assert.equal(ref, 'REF-A')
 	assert.deepEqual(Buffer.from(identityB64!, 'base64'), auth.creds.signedIdentityKey.public)
 
-	// o ACK precisa ter chegado, senão o servidor real não continuaria
+	// the ACK must have arrived, otherwise a real server would not continue
 	await new Promise(resolve => setTimeout(resolve, 10))
 	const ack = server.received().find(n => n.tag === 'iq' && n.attrs.id === 'pair-1')
-	assert.ok(ack, 'cliente não ACKou o <pair-device>')
+	assert.ok(ack, 'the client did not ACK the <pair-device>')
 	assert.equal(ack.attrs.type, 'result')
 
-	// O celular lê o QR e devolve a identidade assinada.
+	// The phone scans the QR and returns the signed identity.
 	server.send(
 		phone.buildPairSuccess({
 			stanzaId: 'pair-2',
@@ -233,21 +233,21 @@ test('fluxo ponta a ponta: QR emitido, celular pareia, cliente contra-assina', a
 	await new Promise(resolve => setTimeout(resolve, 10))
 
 	const reply = server.received().find(n => n.attrs.id === 'pair-2')
-	assert.ok(reply, 'cliente não respondeu ao <pair-success>')
+	assert.ok(reply, 'the client did not reply to the <pair-success>')
 	assert.equal(
 		phone.verifyDeviceSignature(reply, auth.creds.signedIdentityKey.public),
 		true,
-		'contra-assinatura inválida no fluxo completo',
+		'invalid counter-signature in the full flow',
 	)
 
 	assert.equal(auth.creds.me?.id, phone.jid)
 	assert.equal(auth.creds.registered, true)
-	assert.ok(updates.some(u => u.isNewLogin), 'não sinalizou isNewLogin')
+	assert.ok(updates.some(u => u.isNewLogin), 'isNewLogin was never signalled')
 
 	socket.end()
 })
 
-test('QR rotaciona pelos refs conforme expiram', async () => {
+test('the QR rotates through the refs as they expire', async () => {
 	const [clientTransport, serverTransport] = createLinkedTransports()
 	const server = attachFakeServer(serverTransport, { sendSuccessOnConnect: false })
 
@@ -276,7 +276,7 @@ test('QR rotaciona pelos refs conforme expiram', async () => {
 	socket.end()
 })
 
-test('refs esgotados fecham a conexão em vez de travar', async () => {
+test('running out of refs closes the connection instead of hanging', async () => {
 	const [clientTransport, serverTransport] = createLinkedTransports()
 	const server = attachFakeServer(serverTransport, { sendSuccessOnConnect: false })
 
@@ -298,8 +298,8 @@ test('refs esgotados fecham a conexão em vez de travar', async () => {
 	await socket.connect()
 	await server.ready()
 
-	server.send(pairDeviceNode('pair-1', ['SO-UM-REF']))
+	server.send(pairDeviceNode('pair-1', ['ONLY-ONE-REF']))
 
 	const error = await closed
-	assert.match(error.message, /refs do QR esgotados/)
+	assert.match(error.message, /ran out of QR refs/)
 })

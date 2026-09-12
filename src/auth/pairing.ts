@@ -14,23 +14,23 @@ import {
 import type { AuthenticationCreds, SignalIdentity } from './creds.ts'
 
 /**
- * Pareamento por QR code.
+ * QR-code pairing.
  *
- * O fluxo tem três atos:
+ * The flow has three acts:
  *
- *  1. O servidor manda `<pair-device>` com uma lista de `ref`s. Cada ref vira um
- *     QR; eles expiram em segundos, por isso a rotação.
- *  2. O celular lê o QR e devolve, via servidor, um `<pair-success>` contendo a
- *     identidade deste dispositivo assinada pela conta.
- *  3. O cliente valida essa assinatura, contra-assina com a própria identidade e
- *     responde `<pair-device-sign>`.
+ *  1. The server sends `<pair-device>` with a list of `ref`s. Each ref becomes
+ *     a QR code; they expire within seconds, hence the rotation.
+ *  2. The phone scans the QR and returns, through the server, a `<pair-success>`
+ *     carrying this device's identity signed by the account.
+ *  3. The client validates that signature, counter-signs with its own identity
+ *     and replies with `<pair-device-sign>`.
  *
- * Depois disso o servidor derruba a conexão com `stream:error code="515"`
- * (restartRequired) — é o comportamento esperado, e não um erro: basta
- * reconectar, agora com o payload de login.
+ * After that the server drops the connection with `stream:error code="515"`
+ * (restartRequired) — that is expected behaviour, not an error: just reconnect,
+ * this time with the login payload.
  */
 
-/** Prefixos que separam os domínios das duas assinaturas do pareamento. */
+/** Prefixes that separate the domains of the two pairing signatures. */
 const ACCOUNT_SIGNATURE_PREFIX = Buffer.from([6, 0])
 const DEVICE_SIGNATURE_PREFIX = Buffer.from([6, 1])
 
@@ -42,14 +42,14 @@ export class PairingError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// Ato 1 — QR
+// Act 1 — the QR code
 // ---------------------------------------------------------------------------
 
 /**
- * Monta a string do QR a partir de um `ref`.
+ * Builds the QR string from a `ref`.
  *
- * O celular lê estes quatro campos: o ref identifica a sessão de pareamento no
- * servidor, e as três chaves permitem que ele fale com este dispositivo.
+ * The phone reads these four fields: the ref identifies the pairing session on
+ * the server, and the three keys let it talk to this device.
  */
 export function buildQrString(ref: string, creds: AuthenticationCreds): string {
 	return [
@@ -60,12 +60,12 @@ export function buildQrString(ref: string, creds: AuthenticationCreds): string {
 	].join(',')
 }
 
-/** Extrai os refs de um nó `<iq><pair-device>`, na ordem em que devem ser usados. */
+/** Extracts the refs from an `<iq><pair-device>` node, in the order to use them. */
 export function extractPairingRefs(stanza: BinaryNode): string[] {
 	const pairDevice = getBinaryNodeChild(stanza, 'pair-device')
 
 	if (!pairDevice) {
-		throw new PairingError('nó sem <pair-device>')
+		throw new PairingError('node has no <pair-device>')
 	}
 
 	return getBinaryNodeChildren(pairDevice, 'ref')
@@ -75,18 +75,19 @@ export function extractPairingRefs(stanza: BinaryNode): string[] {
 		.filter((ref): ref is string => typeof ref === 'string' && ref.length > 0)
 }
 
-/** ACK obrigatório do `<pair-device>`; sem ele o servidor não continua. */
+/** Mandatory ACK for `<pair-device>`; without it the server does not continue. */
 export function buildPairDeviceAck(stanzaId: string): BinaryNode {
 	return { tag: 'iq', attrs: { to: S_WHATSAPP_NET, type: 'result', id: stanzaId } }
 }
 
 // ---------------------------------------------------------------------------
-// Ato 3 — validação e contra-assinatura
+// Act 3 — validation and counter-signature
 // ---------------------------------------------------------------------------
 
 /**
- * Serializa a identidade assinada. A chave de assinatura da conta é omitida na
- * resposta ao servidor — ele já a tem, e reenviá-la invalida o pareamento.
+ * Serializes the signed identity. The account signature key is omitted in the
+ * reply to the server — it already has it, and sending it back invalidates the
+ * pairing.
  */
 export function encodeSignedDeviceIdentity(
 	account: {
@@ -114,23 +115,23 @@ export function createSignalIdentity(jid: string, accountSignatureKey: Buffer): 
 }
 
 export type PairingResult = {
-	/** Resposta a enviar ao servidor. */
+	/** The reply to send back to the server. */
 	reply: BinaryNode
-	/** Campos a aplicar nas credenciais e persistir. */
+	/** Fields to apply to the credentials and persist. */
 	update: Partial<AuthenticationCreds>
 }
 
 /**
- * Valida o `<pair-success>` e produz o `<pair-device-sign>`.
+ * Validates `<pair-success>` and produces `<pair-device-sign>`.
  *
- * São três verificações, nesta ordem — cada uma falha fecha o pareamento:
+ * There are three checks, in this order — any failure aborts the pairing:
  *
- *  1. HMAC sobre a identidade assinada, com `advSecretKey`. Prova que quem
- *     respondeu leu o QR, já que o segredo só estava lá.
- *  2. Assinatura da conta sobre `[6,0] || deviceDetails || nossa identidade`.
- *     Prova que a conta autorizou ESTE dispositivo, e não outro.
- *  3. Contra-assinatura nossa sobre `[6,1] || deviceDetails || nossa identidade
- *     || chave da conta`. Prova ao servidor que aceitamos.
+ *  1. HMAC over the signed identity, keyed with `advSecretKey`. Proves the
+ *     responder actually scanned the QR, since the secret was only there.
+ *  2. Account signature over `[6,0] || deviceDetails || our identity`. Proves
+ *     the account authorized THIS device and not another one.
+ *  3. Our counter-signature over `[6,1] || deviceDetails || our identity ||
+ *     account key`. Proves to the server that we accept.
  */
 export function configureSuccessfulPairing(
 	stanza: BinaryNode,
@@ -139,7 +140,7 @@ export function configureSuccessfulPairing(
 	const stanzaId = stanza.attrs.id
 
 	if (!stanzaId) {
-		throw new PairingError('<pair-success> sem id')
+		throw new PairingError('<pair-success> has no id')
 	}
 
 	const pairSuccess = getBinaryNodeChild(stanza, 'pair-success')
@@ -149,55 +150,55 @@ export function configureSuccessfulPairing(
 	const bizNode = getBinaryNodeChild(pairSuccess, 'biz')
 
 	if (!deviceIdentityNode || !deviceNode) {
-		throw new PairingError('<pair-success> sem <device-identity> ou <device>')
+		throw new PairingError('<pair-success> is missing <device-identity> or <device>')
 	}
 
 	if (!Buffer.isBuffer(deviceIdentityNode.content)) {
-		throw new PairingError('<device-identity> sem conteúdo binário')
+		throw new PairingError('<device-identity> has no binary content')
 	}
 
 	const jid = deviceNode.attrs.jid
 
 	if (!jid) {
-		throw new PairingError('<device> sem jid')
+		throw new PairingError('<device> has no jid')
 	}
 
 	const hmacContainer = ADVSignedDeviceIdentityHMAC.decode(deviceIdentityNode.content)
 
 	if (!hmacContainer.details || !hmacContainer.hmac) {
-		throw new PairingError('ADVSignedDeviceIdentityHMAC incompleto')
+		throw new PairingError('incomplete ADVSignedDeviceIdentityHMAC')
 	}
 
-	// Contas hospedadas usam um prefixo extra nas assinaturas. Sem um caso real
-	// para conferir, é mais honesto recusar do que adivinhar os bytes.
+	// Hosted accounts use an extra prefix in the signatures. Without a real
+	// sample to check against, refusing is more honest than guessing the bytes.
 	if (hmacContainer.accountType === ADVEncryptionType.HOSTED) {
-		throw new PairingError('contas hospedadas (HOSTED) ainda não são suportadas')
+		throw new PairingError('hosted accounts (HOSTED) are not supported yet')
 	}
 
-	// (1) o HMAC prova que o outro lado conhecia o advSecretKey do QR
+	// (1) the HMAC proves the other side knew the advSecretKey from the QR
 	const expectedHmac = hmacSha256(hmacContainer.details, Buffer.from(creds.advSecretKey, 'base64'))
 
 	if (expectedHmac.length !== hmacContainer.hmac.length || !expectedHmac.equals(hmacContainer.hmac)) {
-		throw new PairingError('HMAC da identidade não confere — o QR lido não é deste dispositivo')
+		throw new PairingError('identity HMAC mismatch — the scanned QR is not this device\'s')
 	}
 
 	const account = ADVSignedDeviceIdentity.decode(hmacContainer.details)
 	const { details: deviceDetails, accountSignatureKey, accountSignature } = account
 
 	if (!deviceDetails || !accountSignatureKey || !accountSignature) {
-		throw new PairingError('ADVSignedDeviceIdentity incompleto')
+		throw new PairingError('incomplete ADVSignedDeviceIdentity')
 	}
 
 	const identityPublic = creds.signedIdentityKey.public
 
-	// (2) a conta assinou ESTE dispositivo
+	// (2) the account signed THIS device
 	const accountMessage = Buffer.concat([ACCOUNT_SIGNATURE_PREFIX, deviceDetails, identityPublic])
 
 	if (!xeddsaVerify(accountSignatureKey, accountMessage, accountSignature)) {
-		throw new PairingError('assinatura da conta inválida')
+		throw new PairingError('invalid account signature')
 	}
 
-	// (3) contra-assinatura deste dispositivo
+	// (3) this device's counter-signature
 	const deviceMessage = Buffer.concat([
 		DEVICE_SIGNATURE_PREFIX,
 		deviceDetails,

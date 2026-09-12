@@ -2,12 +2,12 @@ import type { KeyPair } from '../crypto/index.ts'
 import type { AuthenticationCreds } from './creds.ts'
 
 /**
- * Armazenamento de chaves do Signal.
+ * Signal key storage.
  *
- * A interface é deliberadamente estreita — `get` em lote e `set` em lote — para
- * que um adaptador em Supabase (ou Redis, ou disco) consiga implementá-la sem
- * round-trip por chave. O Signal em si ainda não está implementado; os tipos
- * abaixo já fixam o contrato para quando estiver.
+ * The interface is deliberately narrow — batched `get` and batched `set` — so a
+ * Supabase (or Redis, or disk) adapter can implement it without a round-trip
+ * per key. Signal itself is not implemented yet; the types below already pin
+ * down the contract for when it is.
  */
 
 export type SignalDataTypeMap = {
@@ -29,7 +29,7 @@ export interface SignalKeyStore {
 		ids: string[],
 	): Promise<{ [id: string]: SignalDataTypeMap[T] }>
 
-	/** `null` como valor remove a chave. */
+	/** A `null` value deletes the key. */
 	set(data: SignalDataSet): Promise<void>
 
 	clear?(): Promise<void>
@@ -41,8 +41,8 @@ export type AuthenticationState = {
 }
 
 /**
- * Store em memória. Serve para desenvolvimento e testes; em produção o estado
- * precisa sobreviver ao processo — veja `store/`.
+ * In-memory store. Fine for development and tests; in production the state
+ * needs to outlive the process — see `store/`.
  */
 export function makeInMemoryKeyStore(
 	initial: Record<string, Record<string, unknown>> = {},

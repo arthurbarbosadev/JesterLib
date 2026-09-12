@@ -4,7 +4,7 @@ import { domainTypeToServer, jidEncode } from './jid.ts'
 import type { BinaryNode } from './node.ts'
 import { doubleTokenAt, singleTokenAt, singleTokenCount } from './tokens.ts'
 
-/** Bit do byte de flag do frame que indica payload comprimido com zlib. */
+/** Bit in the frame flag byte marking a zlib-compressed payload. */
 const FLAG_COMPRESSED = 0x02
 
 function unpackNibble(value: number): string {
@@ -24,7 +24,7 @@ function unpackNibble(value: number): string {
 		return '\0'
 	}
 
-	throw new Error(`nibble inválido: ${value}`)
+	throw new Error(`invalid nibble: ${value}`)
 }
 
 function unpackHex(value: number): string {
@@ -36,7 +36,7 @@ function unpackHex(value: number): string {
 		return String.fromCharCode(55 + value)
 	}
 
-	throw new Error(`hex inválido: ${value}`)
+	throw new Error(`invalid hex digit: ${value}`)
 }
 
 class BinaryReader {
@@ -53,7 +53,7 @@ class BinaryReader {
 
 	byte(): number {
 		if (this.pos >= this.buf.length) {
-			throw new Error('fim inesperado do buffer')
+			throw new Error('unexpected end of buffer')
 		}
 
 		return this.buf[this.pos++]!
@@ -61,7 +61,7 @@ class BinaryReader {
 
 	bytes(length: number): Buffer {
 		if (this.pos + length > this.buf.length) {
-			throw new Error(`leitura de ${length} bytes estoura o buffer`)
+			throw new Error(`reading ${length} bytes overruns the buffer`)
 		}
 
 		const out = this.buf.subarray(this.pos, this.pos + length)
@@ -105,7 +105,7 @@ class BinaryNodeDecoder {
 			case TAGS.LIST_16:
 				return this.r.int(2)
 			default:
-				throw new Error(`tag de lista inválida: ${tag}`)
+				throw new Error(`invalid list tag: ${tag}`)
 		}
 	}
 
@@ -120,7 +120,7 @@ class BinaryNodeDecoder {
 			value += unpack(byte & 0x0f)
 		}
 
-		// Bit alto ligado => o último nibble era preenchimento.
+		// High bit set => the last nibble was padding.
 		return startByte >> 7 !== 0 ? value.slice(0, -1) : value
 	}
 
@@ -153,7 +153,7 @@ class BinaryNodeDecoder {
 				const server = this.readString(this.r.byte())
 
 				if (!server) {
-					throw new Error('JID_PAIR sem servidor')
+					throw new Error('JID_PAIR without a server')
 				}
 
 				return jidEncode(user, server)
@@ -172,7 +172,7 @@ class BinaryNodeDecoder {
 				return this.readPacked(tag)
 
 			default:
-				throw new Error(`tag desconhecida ao ler string: ${tag}`)
+				throw new Error(`unknown tag while reading a string: ${tag}`)
 		}
 	}
 
@@ -181,7 +181,7 @@ class BinaryNodeDecoder {
 		const tag = this.readString(this.r.byte())
 
 		if (!listSize || !tag) {
-			throw new Error('nó inválido: lista vazia ou sem tag')
+			throw new Error('invalid node: empty list or missing tag')
 		}
 
 		const attrs: Record<string, string> = {}
@@ -192,7 +192,7 @@ class BinaryNodeDecoder {
 			attrs[key] = this.readString(this.r.byte())
 		}
 
-		// Lista de tamanho par => o último item é o conteúdo.
+		// An even-sized list => the last item is the content.
 		if (listSize % 2 !== 0) {
 			return { tag, attrs }
 		}
@@ -224,12 +224,12 @@ class BinaryNodeDecoder {
 }
 
 /**
- * Decodifica um frame já descriptografado: o primeiro byte é o flag de
- * compressão, o resto é o nó (possivelmente comprimido com zlib).
+ * Decodes an already-decrypted frame: the first byte is the compression flag,
+ * the rest is the node (possibly zlib-compressed).
  */
 export function decodeBinaryNode(frame: Buffer): BinaryNode {
 	if (!frame.length) {
-		throw new Error('frame vazio')
+		throw new Error('empty frame')
 	}
 
 	const flags = frame.readUInt8(0)
@@ -238,7 +238,7 @@ export function decodeBinaryNode(frame: Buffer): BinaryNode {
 	return new BinaryNodeDecoder(body).readNode()
 }
 
-/** Decodifica sem o byte de flag — contraparte de `encodeBinaryNodeBody`. */
+/** Decodes without the flag byte — counterpart to `encodeBinaryNodeBody`. */
 export function decodeBinaryNodeBody(body: Buffer): BinaryNode {
 	return new BinaryNodeDecoder(body).readNode()
 }

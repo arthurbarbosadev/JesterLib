@@ -19,7 +19,7 @@ import { completeHandshake, createClientHello } from '../noise/handshake.ts'
 import { buildClientPayload, DEFAULT_BROWSER, type ClientPayloadConfig } from './client-payload.ts'
 import { createWebSocketTransport, type Transport } from './transport.ts'
 
-/** Códigos que o servidor devolve em `<failure>` / `<stream:error>`. */
+/** Codes the server returns in `<failure>` / `<stream:error>`. */
 export const DisconnectReason = {
 	connectionClosed: 428,
 	connectionLost: 408,
@@ -70,7 +70,7 @@ export type JesterSocketOptions = {
 	auth: AuthenticationState
 	version?: [number, number, number]
 	browser?: [string, string, string]
-	/** Versão do dicionário de tokens; entra no header WA (prólogo do Noise). */
+	/** Token dictionary version; goes into the WA header (the Noise prologue). */
 	dictVersion?: number
 	transport?: Transport
 	url?: string
@@ -80,24 +80,24 @@ export type JesterSocketOptions = {
 	defaultQueryTimeoutMs?: number
 	countryCode?: string
 	languageCode?: string
-	/** Validade do primeiro QR; o celular precisa de tempo para abrir a câmera. */
+	/** Lifetime of the first QR; the phone needs time to open the camera. */
 	qrTimeoutMs?: number
-	/** Validade dos QRs seguintes — os refs expiram rápido no servidor. */
+	/** Lifetime of subsequent QRs — refs expire quickly on the server. */
 	qrRefreshMs?: number
 }
 
 const DEFAULT_VERSION: [number, number, number] = [2, 3000, 1015901307]
 
 /**
- * Conexão com o WhatsApp: handshake, framing e roteamento de nós.
+ * Connection to WhatsApp: handshake, framing and node routing.
  *
- * Responsabilidade termina no nó: ela entrega `BinaryNode` decodificado e
- * envia `BinaryNode`. Pareamento, Signal e mensagens são camadas acima.
+ * Its responsibility ends at the node: it hands out decoded `BinaryNode`s and
+ * sends `BinaryNode`s. Pairing, Signal and messages are layers on top.
  *
- * Eventos:
- *   `connection.update` — mudanças de estado (connecting/open/close, qr)
- *   `node`              — todo nó recebido, já decodificado
- *   `creds.update`      — credenciais mudaram e precisam ser persistidas
+ * Events:
+ *   `connection.update` — state changes (connecting/open/close, qr)
+ *   `node`              — every node received, already decoded
+ *   `creds.update`      — credentials changed and need to be persisted
  */
 export class JesterSocket extends EventEmitter {
 	readonly auth: AuthenticationState
@@ -143,7 +143,7 @@ export class JesterSocket extends EventEmitter {
 		return this.state
 	}
 
-	/** Tag única por mensagem — o servidor ecoa em `attrs.id` na resposta. */
+	/** Unique per-message tag — the server echoes it back in `attrs.id`. */
 	generateMessageTag(): string {
 		return `${randomBytes(8).toString('hex')}.${this.epoch++}`
 	}
@@ -154,13 +154,13 @@ export class JesterSocket extends EventEmitter {
 	}
 
 	// -------------------------------------------------------------------------
-	// Envio
+	// Sending
 	// -------------------------------------------------------------------------
 
-	/** Frame sem cifra — só o handshake usa. */
+	/** Unencrypted frame — only the handshake uses this. */
 	private sendRawFrame(payload: Buffer): void {
 		if (!this.transport?.isOpen) {
-			throw new ConnectionError('conexão fechada', DisconnectReason.connectionClosed)
+			throw new ConnectionError('connection closed', DisconnectReason.connectionClosed)
 		}
 
 		const intro = this.sentIntro ? undefined : buildIntro(this.waHeader, this.auth.creds.routingInfo)
@@ -171,16 +171,16 @@ export class JesterSocket extends EventEmitter {
 
 	sendNode(node: BinaryNode): void {
 		if (!this.noise?.isHandshakeFinished) {
-			throw new ConnectionError('handshake ainda não terminou', DisconnectReason.connectionClosed)
+			throw new ConnectionError('handshake has not finished yet', DisconnectReason.connectionClosed)
 		}
 
-		this.logger.debug({ node: node.tag, attrs: node.attrs }, 'enviando nó')
+		this.logger.debug({ node: node.tag, attrs: node.attrs }, 'sending node')
 		this.sendRawFrame(this.noise.encrypt(encodeBinaryNode(node)))
 	}
 
 	/**
-	 * Envia e espera a resposta com o mesmo `id`. Se o nó não tiver id, um é
-	 * gerado — sem isso não há como casar a resposta.
+	 * Sends and waits for the reply carrying the same `id`. If the node has no id,
+	 * one is generated — without it there is no way to match the response.
 	 */
 	async query(node: BinaryNode, timeoutMs?: number): Promise<BinaryNode> {
 		const id = node.attrs.id ?? this.generateMessageTag()
@@ -195,7 +195,7 @@ export class JesterSocket extends EventEmitter {
 			const error = getBinaryNodeChild(result, 'error')
 			const code = Number(error?.attrs.code ?? 500)
 
-			throw new ConnectionError(error?.attrs.text ?? `query ${id} falhou`, code)
+			throw new ConnectionError(error?.attrs.text ?? `query ${id} failed`, code)
 		}
 
 		return result
@@ -205,7 +205,7 @@ export class JesterSocket extends EventEmitter {
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pendingRequests.delete(id)
-				reject(new ConnectionError(`timeout esperando resposta de ${id}`, DisconnectReason.timedOut))
+				reject(new ConnectionError(`timed out waiting for a reply to ${id}`, DisconnectReason.timedOut))
 			}, timeoutMs)
 
 			this.pendingRequests.set(id, { resolve, reject, timer })
@@ -213,12 +213,12 @@ export class JesterSocket extends EventEmitter {
 	}
 
 	// -------------------------------------------------------------------------
-	// Conexão
+	// Connection
 	// -------------------------------------------------------------------------
 
 	async connect(): Promise<void> {
 		if (this.transport) {
-			throw new Error('socket já foi conectado; crie uma nova instância')
+			throw new Error('socket has already connected; create a new instance')
 		}
 
 		this.updateState({ connection: 'connecting' })
@@ -230,7 +230,7 @@ export class JesterSocket extends EventEmitter {
 
 		transport.on('data', chunk => this.onData(chunk))
 		transport.on('error', err => this.onClose(err))
-		transport.on('close', () => this.onClose(new ConnectionError('conexão fechada', DisconnectReason.connectionClosed)))
+		transport.on('close', () => this.onClose(new ConnectionError('connection closed', DisconnectReason.connectionClosed)))
 
 		if (!transport.isOpen) {
 			await this.waitForEvent(transport, 'open', this.options.connectTimeoutMs ?? 20_000)
@@ -243,7 +243,7 @@ export class JesterSocket extends EventEmitter {
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				cleanup()
-				reject(new ConnectionError(`timeout esperando "${event}"`, DisconnectReason.timedOut))
+				reject(new ConnectionError(`timed out waiting for "${event}"`, DisconnectReason.timedOut))
 			}, timeoutMs)
 
 			const onEvent = () => {
@@ -274,7 +274,7 @@ export class JesterSocket extends EventEmitter {
 			prologue: this.waHeader,
 		})
 
-		this.logger.debug({}, 'enviando ClientHello')
+		this.logger.debug({}, 'sending ClientHello')
 		this.sendRawFrame(createClientHello(this.ephemeral))
 	}
 
@@ -292,7 +292,7 @@ export class JesterSocket extends EventEmitter {
 			try {
 				this.onFrame(frame)
 			} catch (err) {
-				this.logger.error({ err }, 'erro processando frame')
+				this.logger.error({ err }, 'error while processing a frame')
 				this.onClose(err as Error)
 				return
 			}
@@ -306,7 +306,7 @@ export class JesterSocket extends EventEmitter {
 			return
 		}
 
-		// Antes do fim do handshake o único frame esperado é o ServerHello.
+		// Before the handshake finishes, the only expected frame is the ServerHello.
 		if (!noise.isHandshakeFinished) {
 			const payload = buildClientPayload(this.auth.creds, this.config)
 			const finish = completeHandshake(
@@ -315,7 +315,7 @@ export class JesterSocket extends EventEmitter {
 				payload,
 			)
 
-			this.logger.debug({}, 'handshake concluído, enviando ClientFinish')
+			this.logger.debug({}, 'handshake complete, sending ClientFinish')
 			this.sendRawFrame(finish)
 			this.startKeepAlive()
 
@@ -327,9 +327,9 @@ export class JesterSocket extends EventEmitter {
 	}
 
 	private onNode(node: BinaryNode): void {
-		this.logger.debug({ tag: node.tag, attrs: node.attrs }, 'nó recebido')
+		this.logger.debug({ tag: node.tag, attrs: node.attrs }, 'node received')
 
-		// Resposta a uma query pendente tem precedência sobre o roteamento geral.
+		// A reply to a pending query takes precedence over general routing.
 		const id = node.attrs.id
 
 		if (id) {
@@ -361,16 +361,16 @@ export class JesterSocket extends EventEmitter {
 				this.onIb(node)
 				break
 			case 'xmlstreamend':
-				this.onClose(new ConnectionError('stream encerrado pelo servidor', DisconnectReason.connectionClosed))
+				this.onClose(new ConnectionError('stream ended by the server', DisconnectReason.connectionClosed))
 				break
 		}
 	}
 
 	// -------------------------------------------------------------------------
-	// Pareamento
+	// Pairing
 	// -------------------------------------------------------------------------
 
-	/** IQs iniciados pelo servidor. Os do pareamento são os que importam aqui. */
+	/** Server-initiated IQs. The pairing ones are what matter here. */
 	private onIq(node: BinaryNode): void {
 		if (getBinaryNodeChild(node, 'pair-device')) {
 			this.onPairDevice(node)
@@ -386,11 +386,11 @@ export class JesterSocket extends EventEmitter {
 		const id = node.attrs.id
 
 		if (!id) {
-			this.logger.warn({}, '<pair-device> sem id; ignorando')
+			this.logger.warn({}, '<pair-device> has no id; ignoring')
 			return
 		}
 
-		// O servidor só emite os refs seguintes depois do ACK.
+		// The server only emits further refs after the ACK.
 		this.sendNode(buildPairDeviceAck(id))
 
 		this.qrRefs = extractPairingRefs(node)
@@ -398,9 +398,9 @@ export class JesterSocket extends EventEmitter {
 	}
 
 	/**
-	 * Publica o próximo QR e agenda a rotação. Quando os refs acabam, o
-	 * pareamento expirou — não adianta insistir, o servidor precisa de uma
-	 * conexão nova.
+	 * Publishes the next QR and schedules the rotation. When the refs run out the
+	 * pairing has expired — retrying is pointless, the server needs a fresh
+	 * connection.
 	 */
 	private emitNextQr(validForMs: number): void {
 		clearTimeout(this.qrTimer)
@@ -408,7 +408,7 @@ export class JesterSocket extends EventEmitter {
 		const ref = this.qrRefs.shift()
 
 		if (!ref) {
-			this.onClose(new ConnectionError('refs do QR esgotados', DisconnectReason.timedOut))
+			this.onClose(new ConnectionError('ran out of QR refs', DisconnectReason.timedOut))
 			return
 		}
 
@@ -430,11 +430,11 @@ export class JesterSocket extends EventEmitter {
 			this.applyCredsUpdate(update)
 			this.sendNode(reply)
 
-			// O servidor encerra a seguir com stream:error 515 (restartRequired):
-			// é esperado, e a reconexão já usa o payload de login.
+			// The server closes right after with stream:error 515 (restartRequired):
+			// that is expected, and the reconnect already uses the login payload.
 			this.updateState({ isNewLogin: true, qr: undefined })
 		} catch (err) {
-			this.logger.error({ err }, 'pareamento falhou')
+			this.logger.error({ err }, 'pairing failed')
 			this.onClose(err as Error)
 		}
 	}
@@ -468,11 +468,11 @@ export class JesterSocket extends EventEmitter {
 	private onFailure(node: BinaryNode): void {
 		const code = Number(node.attrs.reason ?? DisconnectReason.badSession)
 
-		this.onClose(new ConnectionError(node.attrs.text ?? `falha de conexão (${code})`, code))
+		this.onClose(new ConnectionError(node.attrs.text ?? `connection failure (${code})`, code))
 	}
 
 	private onStreamError(node: BinaryNode): void {
-		// O motivo real costuma estar no primeiro filho (`conflict`, `ack`, ...).
+		// The real reason is usually in the first child (`conflict`, `ack`, ...).
 		const child = Array.isArray(node.content) ? node.content[0] : undefined
 		const code = Number(node.attrs.code ?? DisconnectReason.connectionClosed)
 		const detail = [node.attrs.code, child?.tag, child?.attrs?.type].filter(Boolean).join(' ')
@@ -481,9 +481,9 @@ export class JesterSocket extends EventEmitter {
 	}
 
 	/**
-	 * `ib` carrega informações fora de banda. A que importa aqui é o
-	 * `edge_routing`: guardar o shard faz as próximas conexões irem direto ao
-	 * servidor certo.
+	 * `ib` carries out-of-band information. The one that matters here is
+	 * `edge_routing`: storing the shard makes later connections go straight to
+	 * the right server.
 	 */
 	private onIb(node: BinaryNode): void {
 		const routing = getBinaryNodeChild(node, 'edge_routing')
@@ -496,7 +496,7 @@ export class JesterSocket extends EventEmitter {
 	}
 
 	// -------------------------------------------------------------------------
-	// Keep-alive e encerramento
+	// Keep-alive and shutdown
 	// -------------------------------------------------------------------------
 
 	private startKeepAlive(): void {
@@ -512,11 +512,11 @@ export class JesterSocket extends EventEmitter {
 				attrs: { to: S_WHATSAPP_NET, type: 'get', xmlns: 'w:p' },
 				content: [{ tag: 'ping', attrs: {} }],
 			}).catch(err => {
-				this.logger.warn({ err }, 'keep-alive falhou')
+				this.logger.warn({ err }, 'keep-alive failed')
 			})
 		}, interval)
 
-		// Não segura o processo vivo só por causa do ping.
+		// Do not keep the process alive just for the ping.
 		this.keepAliveTimer.unref?.()
 	}
 
@@ -541,8 +541,8 @@ export class JesterSocket extends EventEmitter {
 		this.transport?.close()
 	}
 
-	/** Encerra a conexão. `error` fica disponível em `lastDisconnect`. */
+	/** Ends the connection. `error` is exposed through `lastDisconnect`. */
 	end(error?: Error): void {
-		this.onClose(error ?? new ConnectionError('encerrado pelo cliente', DisconnectReason.connectionClosed))
+		this.onClose(error ?? new ConnectionError('closed by the client', DisconnectReason.connectionClosed))
 	}
 }

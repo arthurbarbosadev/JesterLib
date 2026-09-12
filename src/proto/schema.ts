@@ -1,11 +1,11 @@
 import { ProtoReader, ProtoWriter, WireType, zigzagDecode, zigzagEncode } from './wire.ts'
 
 /**
- * Camada declarativa sobre o wire format.
+ * Declarative layer on top of the wire format.
  *
- * Em vez de gerar código a partir de `.proto`, as mensagens são descritas como
- * objetos e o tipo TypeScript é inferido delas. Escrever `WAProto` à mão fica
- * viável e o schema serve de documentação do protocolo.
+ * Instead of generating code from `.proto` files, messages are described as
+ * objects and the TypeScript type is inferred from them. Writing `WAProto` by
+ * hand stays practical, and the schema doubles as protocol documentation.
  */
 
 export type ScalarType =
@@ -46,12 +46,12 @@ export type MessageCodec<T> = {
 	decode(buf: Buffer): T
 }
 
-/** Campo singular. */
+/** Singular field. */
 export function f<T extends FieldType>(id: number, type: T): FieldDef<T, false> {
 	return { id, type, repeated: false }
 }
 
-/** Campo `repeated`. */
+/** `repeated` field. */
 export function r<T extends FieldType>(id: number, type: T): FieldDef<T, true> {
 	return { id, type, repeated: true }
 }
@@ -143,7 +143,7 @@ function readValue(rd: ProtoReader, type: ScalarType | MessageCodec<any>, wireTy
 		case 'sint64':
 			return zigzagDecode(rd.varint())
 		case 'int32': {
-			// int32 negativo é serializado em 64 bits; reinterpreta com sinal.
+			// A negative int32 is serialized over 64 bits; reinterpret it as signed.
 			const v = BigInt.asIntN(64, rd.varint())
 			return Number(v)
 		}
@@ -161,7 +161,7 @@ function readValue(rd: ProtoReader, type: ScalarType | MessageCodec<any>, wireTy
 }
 
 export function defineMessage<S extends FieldsShape>(name: string, fields: S): MessageCodec<Infer<S>> {
-	// Índice reverso (fieldNumber -> campo) montado uma vez por mensagem.
+	// Reverse index (fieldNumber -> field), built once per message.
 	let byId: Map<number, { key: string; def: FieldDef }> | undefined
 
 	const index = () => {
@@ -225,7 +225,7 @@ export function defineMessage<S extends FieldsShape>(name: string, fields: S): M
 				if (entry.def.repeated) {
 					const list = (out[entry.key] ??= []) as unknown[]
 
-					// Campos escalares `repeated` podem vir packed em um único bloco.
+					// `repeated` scalar fields may arrive packed into a single block.
 					if (typeof type === 'string' && wireType === WireType.LENGTH_DELIMITED && wireTypeOf(type) !== WireType.LENGTH_DELIMITED) {
 						const packed = rd.bytes()
 						const inner = new ProtoReader(packed)

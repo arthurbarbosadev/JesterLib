@@ -1,10 +1,10 @@
 /**
- * Runtime protobuf minimalista (proto2/proto3 wire format).
+ * Minimal protobuf runtime (proto2/proto3 wire format).
  *
- * O WhatsApp usa protobuf em todo lugar, mas só um subconjunto do formato:
- * varint, 64-bit, length-delimited e 32-bit. Não há `group` (deprecado) nem
- * necessidade de reflexão. Isso cabe em ~200 linhas e evita arrastar uma
- * dependência de codegen só pra ler alguns dezenas de mensagens.
+ * WhatsApp uses protobuf everywhere, but only a subset of the format: varint,
+ * 64-bit, length-delimited and 32-bit. There are no `group` fields (deprecated)
+ * and no need for reflection. That fits in ~200 lines and avoids pulling in a
+ * codegen dependency just to read a few dozen messages.
  */
 
 export const WireType = {
@@ -35,7 +35,7 @@ export class ProtoReader {
 
 		for (;;) {
 			if (this.pos >= this.end) {
-				throw new Error('varint truncado')
+				throw new Error('truncated varint')
 			}
 
 			const byte = this.buf[this.pos++]!
@@ -48,7 +48,7 @@ export class ProtoReader {
 			shift += 7n
 
 			if (shift > 63n) {
-				throw new Error('varint maior que 64 bits')
+				throw new Error('varint larger than 64 bits')
 			}
 		}
 	}
@@ -89,7 +89,7 @@ export class ProtoReader {
 		const length = this.varintNumber()
 
 		if (this.pos + length > this.end) {
-			throw new Error(`campo length-delimited estoura o buffer (${length} bytes)`)
+			throw new Error(`length-delimited field overruns the buffer (${length} bytes)`)
 		}
 
 		const out = this.buf.subarray(this.pos, this.pos + length)
@@ -98,7 +98,7 @@ export class ProtoReader {
 		return out
 	}
 
-	/** Pula um campo desconhecido preservando o alinhamento do stream. */
+	/** Skips an unknown field while keeping the stream aligned. */
 	skip(wireType: number): void {
 		switch (wireType) {
 			case WireType.VARINT:
@@ -114,11 +114,11 @@ export class ProtoReader {
 				this.pos += 4
 				break
 			default:
-				throw new Error(`wire type desconhecido: ${wireType}`)
+				throw new Error(`unknown wire type: ${wireType}`)
 		}
 	}
 
-	/** Itera (fieldNumber, wireType) até o fim da mensagem. */
+	/** Iterates (fieldNumber, wireType) until the end of the message. */
 	*fields(): Generator<[number, number]> {
 		while (!this.eof) {
 			const tag = this.varintNumber()
@@ -142,7 +142,7 @@ export class ProtoWriter {
 		let v = typeof value === 'boolean' ? BigInt(value ? 1 : 0) : BigInt(value)
 
 		if (v < 0n) {
-			// Inteiros negativos viram complemento de dois em 64 bits.
+			// Negative integers are encoded as two's complement over 64 bits.
 			v += 1n << 64n
 		}
 
@@ -205,7 +205,7 @@ export class ProtoWriter {
 	}
 }
 
-/** ZigZag para os tipos `sint32` / `sint64`. */
+/** ZigZag encoding for the `sint32` / `sint64` types. */
 export function zigzagEncode(value: number | bigint): bigint {
 	const v = BigInt(value)
 

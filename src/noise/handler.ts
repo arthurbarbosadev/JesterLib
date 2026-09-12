@@ -1,24 +1,24 @@
 import { aesDecryptGCM, aesEncryptGCM, hkdf, sha256 } from '../crypto/index.ts'
 
 /**
- * Estado do Noise Protocol Framework, padrão `XX` com X25519 + AES-GCM + SHA-256.
+ * Noise Protocol Framework state, pattern `XX` with X25519 + AES-GCM + SHA-256.
  *
- * XX significa que nenhum dos lados conhece a chave estática do outro de
- * antemão: ambas são transmitidas durante o handshake. São três mensagens —
- * ClientHello, ServerHello, ClientFinish — e ao final o canal vira simétrico,
- * com uma chave por direção.
+ * XX means neither side knows the other's static key up front: both are
+ * transmitted during the handshake. There are three messages — ClientHello,
+ * ServerHello, ClientFinish — and at the end the channel becomes symmetric,
+ * with one key per direction.
  *
- * Duas armadilhas que não aparecem na spec do Noise e sim no uso do WhatsApp:
+ * Two traps that come from WhatsApp's usage rather than the Noise spec:
  *
- * 1. Durante o handshake as duas direções compartilham o MESMO contador de
- *    nonce. Só depois de `finishInit()` cada direção passa a ter o seu.
- * 2. Todo ciphertext trocado entra no hash de transcrição (`authenticate`),
- *    inclusive o que você mesmo produziu.
+ * 1. During the handshake, both directions share the SAME nonce counter. Only
+ *    after `finishInit()` does each direction get its own.
+ * 2. Every ciphertext exchanged is mixed into the transcript hash
+ *    (`authenticate`), including the ones you produced yourself.
  */
 
 const NOISE_MODE = 'Noise_XX_25519_AESGCM_SHA256'
 
-/** 'W', 'A', versão maior, versão do dicionário de tokens. */
+/** 'W', 'A', major version, token dictionary version. */
 export function makeWaHeader(dictVersion: number): Buffer {
 	return Buffer.from([87, 65, 6, dictVersion])
 }
@@ -31,8 +31,8 @@ function generateIV(counter: number): Buffer {
 }
 
 /**
- * Estado inicial do hash: se o nome do protocolo cabe em HASHLEN, ele é usado
- * cru com zero-padding; senão, usa-se o seu SHA-256 (Noise spec, §5.2).
+ * Initial hash state: if the protocol name fits in HASHLEN it is used raw with
+ * zero padding; otherwise its SHA-256 is used (Noise spec, §5.2).
  */
 function initialHash(): Buffer {
 	const name = Buffer.from(NOISE_MODE, 'utf-8')
@@ -49,20 +49,20 @@ function initialHash(): Buffer {
 }
 
 /**
- * `initiator` é o cliente. `responder` existe para testar o handshake contra um
- * servidor simulado — os dois lados compartilham toda a lógica e divergem só no
- * split final, onde as chaves trocam de direção.
+ * `initiator` is the client. `responder` exists so the handshake can be tested
+ * against a simulated server — both sides share all the logic and differ only
+ * in the final split, where the keys swap direction.
  */
 export type NoiseRole = 'initiator' | 'responder'
 
 export type NoiseHandlerOptions = {
 	/**
-	 * Chave pública EFÊMERA do cliente. Importante: é a efêmera que entra no
-	 * hash inicial, não a estática — a estática só aparece no ClientFinish.
-	 * Os dois lados absorvem a MESMA chave (a do cliente) nesta posição.
+	 * The client's EPHEMERAL public key. Important: it is the ephemeral key that
+	 * goes into the initial hash, not the static one — the static key only shows
+	 * up in the ClientFinish. Both sides absorb the SAME key here (the client's).
 	 */
 	ephemeralPublic: Buffer
-	/** Prólogo: o header WA, misturado no hash antes de tudo. */
+	/** Prologue: the WA header, mixed into the hash before anything else. */
 	prologue: Buffer
 	role?: NoiseRole
 }
@@ -94,7 +94,7 @@ export class NoiseHandler {
 		return this.handshakeFinished
 	}
 
-	/** Mistura dados no hash de transcrição. Inerte após o handshake. */
+	/** Mixes data into the transcript hash. Inert once the handshake is done. */
 	authenticate(data: Buffer): void {
 		if (!this.handshakeFinished) {
 			this.hash = sha256(Buffer.concat([this.hash, data]))
@@ -111,7 +111,7 @@ export class NoiseHandler {
 	}
 
 	decrypt(ciphertext: Buffer): Buffer {
-		// Antes de finishInit as duas direções compartilham o contador de escrita.
+		// Before finishInit, both directions share the write counter.
 		const counter = this.handshakeFinished ? this.readCounter : this.writeCounter
 
 		if (this.handshakeFinished) {
@@ -127,14 +127,14 @@ export class NoiseHandler {
 		return plaintext
 	}
 
-	/** HKDF com o salt corrente, devolvendo duas chaves de 32 bytes. */
+	/** HKDF with the current salt, yielding two 32-byte keys. */
 	private localHKDF(data: Buffer): [Buffer, Buffer] {
 		const key = hkdf(data, 64, { salt: this.salt })
 
 		return [key.subarray(0, 32), key.subarray(32)]
 	}
 
-	/** Absorve um segredo DH no estado, zerando os contadores. */
+	/** Absorbs a DH secret into the state, resetting the counters. */
 	mixIntoKey(data: Buffer): void {
 		const [write, read] = this.localHKDF(data)
 
@@ -146,8 +146,8 @@ export class NoiseHandler {
 	}
 
 	/**
-	 * Split final: uma chave por direção, transcrição descartada.
-	 * O que é chave de escrita para um lado é de leitura para o outro.
+	 * Final split: one key per direction, transcript discarded.
+	 * One side's write key is the other side's read key.
 	 */
 	finishInit(): void {
 		const [first, second] = this.localHKDF(Buffer.alloc(0))
@@ -160,7 +160,7 @@ export class NoiseHandler {
 		this.handshakeFinished = true
 	}
 
-	/** Exposto só para testes: permite comparar o estado dos dois lados. */
+	/** Exposed for tests only: lets both sides' states be compared. */
 	debugState(): { hash: string; salt: string; encKey: string; decKey: string } {
 		return {
 			hash: this.hash.toString('hex'),

@@ -3,7 +3,6 @@ import { before, test } from 'node:test'
 import { initAuthCreds, deserializeCreds, serializeCreds } from '../src/auth/creds.ts'
 import { makeInMemoryKeyStore, type AuthenticationState } from '../src/auth/state.ts'
 import { setTokenDictionary } from '../src/binary/tokens.ts'
-import type { BinaryNode } from '../src/binary/node.ts'
 import { Platform, WebSubPlatform } from '../src/proto/wa.ts'
 import {
 	ConnectionError,
@@ -14,7 +13,7 @@ import {
 import { createLinkedTransports } from '../src/socket/transport.ts'
 import { attachFakeServer } from './helpers/fake-server.ts'
 
-/** Dicionário mínimo com os tokens que este teste usa. */
+/** Minimal dictionary holding just the tokens this test uses. */
 before(() => {
 	setTokenDictionary({
 		single: [
@@ -66,13 +65,13 @@ async function connectPair(options: ExtraOptions = {}) {
 }
 
 function waitForOpen(socket: JesterSocket, timeoutMs = 2000): Promise<void> {
-	// O <success> pode já ter chegado antes deste listener ser anexado.
+	// The <success> may already have arrived before this listener is attached.
 	if (socket.connectionState.connection === 'open') {
 		return Promise.resolve()
 	}
 
 	return new Promise((resolve, reject) => {
-		const timer = setTimeout(() => reject(new Error('timeout esperando connection=open')), timeoutMs)
+		const timer = setTimeout(() => reject(new Error('timed out waiting for connection=open')), timeoutMs)
 
 		socket.on('connection.update', update => {
 			if (update.connection === 'open') {
@@ -82,35 +81,35 @@ function waitForOpen(socket: JesterSocket, timeoutMs = 2000): Promise<void> {
 
 			if (update.connection === 'close') {
 				clearTimeout(timer)
-				reject(update.lastDisconnect?.error ?? new Error('fechou'))
+				reject(update.lastDisconnect?.error ?? new Error('closed'))
 			}
 		})
 	})
 }
 
-test('handshake completo leva a conexão até connection=open', async () => {
+test('a full handshake brings the connection to connection=open', async () => {
 	const { socket, server } = await connectPair()
 	const opened = waitForOpen(socket)
 
 	await opened
 
 	assert.equal(socket.connectionState.connection, 'open')
-	assert.ok(server.clientPayload(), 'servidor não recebeu ClientPayload')
+	assert.ok(server.clientPayload(), 'server never received a ClientPayload')
 
 	socket.end()
 })
 
-test('o ClientPayload de registro chega íntegro do outro lado', async () => {
+test('the registration ClientPayload arrives intact on the other side', async () => {
 	const { socket, server, auth } = await connectPair()
 	await waitForOpen(socket)
 
 	const payload = server.clientPayload()
 	assert.ok(payload)
 
-	// Sem conta ainda: tem que ser o payload de registro.
+	// No account yet: it has to be the registration payload.
 	assert.equal(payload.passive, false)
 	assert.equal(payload.username, undefined)
-	assert.ok(payload.devicePairingData, 'faltou devicePairingData')
+	assert.ok(payload.devicePairingData, 'devicePairingData is missing')
 
 	const pairing = payload.devicePairingData!
 	assert.deepEqual(pairing.eIdent, auth.creds.signedIdentityKey.public)
@@ -118,9 +117,9 @@ test('o ClientPayload de registro chega íntegro do outro lado', async () => {
 	assert.deepEqual(pairing.eSkeySig, auth.creds.signedPreKey.signature)
 	assert.deepEqual(pairing.eKeytype, Buffer.from([5]))
 
-	// registrationId em big-endian de 4 bytes
+	// registrationId as a 4-byte big-endian value
 	assert.equal(pairing.eRegid?.readUInt32BE(0), auth.creds.registrationId)
-	// keyId da prekey em big-endian de 3 bytes
+	// prekey keyId as a 3-byte big-endian value
 	assert.equal(pairing.eSkeyId?.length, 3)
 
 	assert.equal(payload.userAgent?.platform, Platform.WEB)
@@ -129,7 +128,7 @@ test('o ClientPayload de registro chega íntegro do outro lado', async () => {
 	socket.end()
 })
 
-test('query casa a resposta pelo id e devolve o nó', async () => {
+test('query matches the reply by id and returns the node', async () => {
 	const { socket, server } = await connectPair()
 	await waitForOpen(socket)
 
@@ -154,16 +153,16 @@ test('query casa a resposta pelo id e devolve o nó', async () => {
 	assert.equal(result.tag, 'iq')
 	assert.equal(result.attrs.type, 'result')
 
-	// o servidor recebeu exatamente o que foi pedido
+	// the server received exactly what was asked for
 	const sent = server.received().find(n => n.tag === 'iq')
 	assert.ok(sent)
 	assert.equal(sent.attrs.xmlns, 'w:p')
-	assert.ok(sent.attrs.id, 'query precisa gerar um id')
+	assert.ok(sent.attrs.id, 'query must generate an id')
 
 	socket.end()
 })
 
-test('query com type=error vira ConnectionError com o código do servidor', async () => {
+test('a type=error reply becomes a ConnectionError carrying the server code', async () => {
 	const { socket, server } = await connectPair()
 	await waitForOpen(socket)
 
@@ -172,7 +171,7 @@ test('query com type=error vira ConnectionError com o código do servidor', asyn
 			? {
 					tag: 'iq',
 					attrs: { id: node.attrs.id!, type: 'error' },
-					content: [{ tag: 'error', attrs: { code: '404', text: 'não encontrado' } }],
+					content: [{ tag: 'error', attrs: { code: '404', text: 'not found' } }],
 				}
 			: undefined,
 	)
@@ -182,7 +181,7 @@ test('query com type=error vira ConnectionError com o código do servidor', asyn
 		(err: ConnectionError) => {
 			assert.equal(err.name, 'ConnectionError')
 			assert.equal(err.code, 404)
-			assert.equal(err.message, 'não encontrado')
+			assert.equal(err.message, 'not found')
 
 			return true
 		},
@@ -191,7 +190,7 @@ test('query com type=error vira ConnectionError com o código do servidor', asyn
 	socket.end()
 })
 
-test('query sem resposta estoura no timeout', async () => {
+test('an unanswered query times out', async () => {
 	const { socket } = await connectPair({ defaultQueryTimeoutMs: 150 })
 	await waitForOpen(socket)
 
@@ -203,7 +202,7 @@ test('query sem resposta estoura no timeout', async () => {
 	socket.end()
 })
 
-test('<failure> fecha a conexão com o motivo do servidor', async () => {
+test('<failure> closes the connection with the server reason', async () => {
 	const { socket, server } = await connectPair()
 	await waitForOpen(socket)
 
@@ -215,14 +214,14 @@ test('<failure> fecha a conexão com o motivo do servidor', async () => {
 		})
 	})
 
-	server.send({ tag: 'failure', attrs: { reason: '401', text: 'deslogado' } })
+	server.send({ tag: 'failure', attrs: { reason: '401', text: 'logged out' } })
 
 	const error = await closed
 	assert.equal(error.code, DisconnectReason.loggedOut)
 	assert.equal(socket.connectionState.connection, 'close')
 })
 
-test('<stream:error> fecha a conexão', async () => {
+test('<stream:error> closes the connection', async () => {
 	const { socket, server } = await connectPair()
 	await waitForOpen(socket)
 
@@ -241,7 +240,7 @@ test('<stream:error> fecha a conexão', async () => {
 	assert.match(error.message, /conflict/)
 })
 
-test('routing info de <ib> é guardada nas credenciais', async () => {
+test('routing info from <ib> is stored in the credentials', async () => {
 	const { socket, server, auth } = await connectPair()
 	await waitForOpen(socket)
 
@@ -266,7 +265,7 @@ test('routing info de <ib> é guardada nas credenciais', async () => {
 	socket.end()
 })
 
-test('<success> grava lid e platform nas credenciais', async () => {
+test('<success> records lid and platform in the credentials', async () => {
 	const [clientTransport, serverTransport] = createLinkedTransports()
 	const server = attachFakeServer(serverTransport, { sendSuccessOnConnect: false })
 	const auth = makeAuth()
@@ -286,7 +285,7 @@ test('<success> grava lid e platform nas credenciais', async () => {
 	socket.end()
 })
 
-test('conexão já pareada envia payload de login, não de registro', async () => {
+test('an already-paired connection sends the login payload, not the registration one', async () => {
 	const [clientTransport, serverTransport] = createLinkedTransports()
 	const server = attachFakeServer(serverTransport)
 	const auth = makeAuth()
@@ -304,32 +303,32 @@ test('conexão já pareada envia payload de login, não de registro', async () =
 	assert.equal(payload.username, 5511987654321n)
 	assert.equal(payload.device, 7)
 	assert.equal(payload.passive, true)
-	assert.equal(payload.devicePairingData, undefined, 'login não deve carregar dados de pareamento')
+	assert.equal(payload.devicePairingData, undefined, 'login must not carry pairing data')
 
 	socket.end()
 })
 
-test('queda do transporte rejeita as queries pendentes', async () => {
+test('a dropped transport rejects pending queries', async () => {
 	const { socket } = await connectPair({ defaultQueryTimeoutMs: 5000 })
 	await waitForOpen(socket)
 
 	const pending = socket.query({ tag: 'iq', attrs: { to: 's.whatsapp.net', type: 'get' } })
 
-	socket.end(new ConnectionError('caiu', DisconnectReason.connectionLost))
+	socket.end(new ConnectionError('dropped', DisconnectReason.connectionLost))
 
 	await assert.rejects(pending, (err: ConnectionError) => err.code === DisconnectReason.connectionLost)
 })
 
-test('enviar nó antes do handshake é erro explícito', () => {
+test('sending a node before the handshake is an explicit error', () => {
 	const [clientTransport] = createLinkedTransports()
 	const socket = new JesterSocket({ auth: makeAuth(), transport: clientTransport })
 
-	assert.throws(() => socket.sendNode({ tag: 'iq', attrs: {} }), /handshake ainda não terminou/)
+	assert.throws(() => socket.sendNode({ tag: 'iq', attrs: {} }), /handshake has not finished yet/)
 })
 
-test('credenciais sobrevivem a serialização em JSON', () => {
+test('credentials survive JSON serialization', () => {
 	const creds = initAuthCreds()
-	creds.me = { id: '5511999999999:1@s.whatsapp.net', name: 'Teste' }
+	creds.me = { id: '5511999999999:1@s.whatsapp.net', name: 'Test' }
 	creds.routingInfo = Buffer.from([1, 2, 3])
 
 	const restored = deserializeCreds(serializeCreds(creds))
@@ -342,5 +341,5 @@ test('credenciais sobrevivem a serialização em JSON', () => {
 	assert.equal(restored.registrationId, creds.registrationId)
 	assert.equal(restored.advSecretKey, creds.advSecretKey)
 	assert.deepEqual(restored.me, creds.me)
-	assert.ok(Buffer.isBuffer(restored.noiseKey.private), 'Buffer virou outra coisa na volta')
+	assert.ok(Buffer.isBuffer(restored.noiseKey.private), 'a Buffer turned into something else on the way back')
 })

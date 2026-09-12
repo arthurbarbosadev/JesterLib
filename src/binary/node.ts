@@ -1,6 +1,6 @@
 /**
- * Todo tráfego pós-handshake é uma árvore de nós — o equivalente binário de um
- * stanza XMPP. `<iq type="get" to="..."><query/></iq>` vira:
+ * All post-handshake traffic is a tree of nodes — the binary equivalent of an
+ * XMPP stanza. `<iq type="get" to="..."><query/></iq>` becomes:
  *
  *   { tag: 'iq', attrs: { type: 'get', to: '...' }, content: [{ tag: 'query', attrs: {} }] }
  */
@@ -10,7 +10,7 @@ export type BinaryNode = {
 	content?: BinaryNode[] | string | Buffer
 }
 
-/** Filhos como array, independente de o conteúdo ser nó, string ou binário. */
+/** Children as an array, whether the content is nodes, a string or binary. */
 export function getBinaryNodeChildren(node: BinaryNode | undefined, tag?: string): BinaryNode[] {
 	if (!Array.isArray(node?.content)) {
 		return []
@@ -59,7 +59,7 @@ export function getBinaryNodeChildUInt(node: BinaryNode | undefined, tag: string
 	return value
 }
 
-/** Pretty-print para depuração — `console.log` de Buffer aninhado é ilegível. */
+/** Pretty-printer for debugging — nested Buffers are unreadable in console.log. */
 export function nodeToString(node: BinaryNode, indent = 0): string {
 	const pad = '  '.repeat(indent)
 	const attrs = Object.entries(node.attrs)
@@ -83,7 +83,7 @@ export function nodeToString(node: BinaryNode, indent = 0): string {
 	return `${pad}<${node.tag}${attrs}>\n${children}\n${pad}</${node.tag}>`
 }
 
-/** Remove atributos undefined/null para não quebrar o encoder. */
+/** Strips undefined/null attributes so they do not break the encoder. */
 export function cleanAttrs(attrs: Record<string, string | number | undefined | null>): Record<string, string> {
 	const out: Record<string, string> = {}
 

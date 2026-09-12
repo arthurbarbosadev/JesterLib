@@ -9,11 +9,11 @@ import {
 } from './constants.ts'
 
 /**
- * Um JID identifica um destino: usuário, grupo, canal, ou um *dispositivo*
- * específico de um usuário. No multi-device o `device` é obrigatório para
- * endereçar sessões Signal — cada aparelho logado é um destinatário distinto.
+ * A JID identifies a destination: a user, a group, a channel, or a *specific
+ * device* belonging to a user. Under multi-device, `device` is required to
+ * address Signal sessions — every logged-in device is a distinct recipient.
  *
- * Forma textual: `user[:device][_agent]@server`
+ * Textual form: `user[:device][_agent]@server`
  */
 export type FullJid = {
 	user: string
@@ -58,7 +58,7 @@ export function jidDecode(jid: string | undefined): FullJid | undefined {
 	return out
 }
 
-/** Remove device/agent — útil para agrupar por conta em vez de por aparelho. */
+/** Drops device/agent — useful to group by account rather than by device. */
 export function jidNormalizedUser(jid: string | undefined): string {
 	const decoded = jidDecode(jid)
 
@@ -71,7 +71,7 @@ export function jidNormalizedUser(jid: string | undefined): string {
 	return jidEncode(decoded.user, server)
 }
 
-/** Compara ignorando device/agent. */
+/** Compares two JIDs ignoring device/agent. */
 export function areJidsSameUser(a: string | undefined, b: string | undefined): boolean {
 	return jidNormalizedUser(a) === jidNormalizedUser(b)
 }
@@ -101,8 +101,8 @@ export function isJidCall(jid: string | undefined): boolean {
 }
 
 /**
- * O AD_JID codifica o servidor em um byte em vez de uma string. Só os dois
- * domínios abaixo cabem nessa forma compacta.
+ * AD_JID encodes the server as a single byte instead of a string. Only the two
+ * domains below fit that compact form.
  */
 export function serverToDomainType(server: string): number | undefined {
 	if (server === S_WHATSAPP_NET) {

@@ -2,16 +2,17 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { Curve, addKeyType, xeddsaSign, type KeyPair } from '../crypto/index.ts'
 
 /**
- * Credenciais de um dispositivo companheiro.
+ * Credentials for a companion device.
  *
- * Tudo aqui é serializável de propósito: é esse objeto (mais o SignalKeyStore)
- * que permite derrubar o processo e subir outro sem ler QR de novo. Por isso
- * nada de Buffer escondido em closure ou estado só em memória.
+ * Everything here is serializable by design: this object (plus the
+ * SignalKeyStore) is what lets you kill the process and start another one
+ * without scanning a QR again. Hence no Buffers hidden in closures and no
+ * memory-only state.
  */
 
 export type SignedKeyPair = {
 	keyPair: KeyPair
-	/** Assinatura XEdDSA da pública (com o byte 0x05) pela identidade. */
+	/** XEdDSA signature over the public key (with the 0x05 byte) by the identity. */
 	signature: Buffer
 	keyId: number
 }
@@ -28,15 +29,15 @@ export type Me = {
 }
 
 export type AuthenticationCreds = {
-	/** Chave estática do Noise — identifica esta conexão, não a conta. */
+	/** Noise static key — identifies this connection, not the account. */
 	noiseKey: KeyPair
-	/** Par efêmero do pareamento, presente no QR. */
+	/** Ephemeral pairing key pair, present in the QR. */
 	pairingEphemeralKeyPair: KeyPair
-	/** Identidade Signal de longo prazo deste dispositivo. */
+	/** This device's long-term Signal identity. */
 	signedIdentityKey: KeyPair
 	signedPreKey: SignedKeyPair
 	registrationId: number
-	/** Segredo do pareamento (base64); valida o HMAC vindo do celular. */
+	/** Pairing secret (base64); validates the HMAC coming from the phone. */
 	advSecretKey: string
 
 	nextPreKeyId: number
@@ -47,29 +48,30 @@ export type AuthenticationCreds = {
 	identityId: Buffer
 	backupToken: Buffer
 
-	/** false até o `pair-success`; a partir daí a conexão é de login. */
+	/** false until `pair-success`; from then on connections are logins. */
 	registered: boolean
 
 	me?: Me
-	/** ADVSignedDeviceIdentity recebida no pareamento, já serializada. */
+	/** ADVSignedDeviceIdentity received during pairing, already serialized. */
 	account?: Buffer
 	signalIdentities?: SignalIdentity[]
 	platform?: string
-	/** Shard do edge; reenviado no intro das próximas conexões. */
+	/** Edge shard; resent in the intro of subsequent connections. */
 	routingInfo?: Buffer
 	pairingCode?: string
 	lastPropHash?: string
 	accountSyncCounter: number
 }
 
-/** ID de registro do Signal: 14 bits. */
+/** Signal registration id: 14 bits. */
 export function generateRegistrationId(): number {
 	return Uint16Array.from(randomBytes(2))[0]! & 16383
 }
 
 /**
- * Gera uma prekey assinada. A assinatura cobre a pública COM o byte de tipo
- * 0x05 — assinar os 32 bytes crus produz algo que o servidor rejeita.
+ * Generates a signed pre-key. The signature covers the public key WITH the
+ * 0x05 type byte — signing the raw 32 bytes produces something the server
+ * rejects.
  */
 export function makeSignedKeyPair(identityKey: KeyPair, keyId: number): SignedKeyPair {
 	const preKey = Curve.generateKeyPair()
@@ -103,17 +105,18 @@ export function initAuthCreds(): AuthenticationCreds {
 }
 
 // ---------------------------------------------------------------------------
-// Serialização
+// Serialization
 // ---------------------------------------------------------------------------
 
 /**
- * Buffers não sobrevivem a JSON.stringify, então são marcados explicitamente.
- * Use com `JSON.stringify(creds, credsReplacer)` / `JSON.parse(s, credsReviver)`.
+ * Buffers do not survive JSON.stringify, so they are tagged explicitly.
+ * Use with `JSON.stringify(creds, credsReplacer)` / `JSON.parse(s, credsReviver)`.
  *
- * O valor precisa ser lido de `this[key]`, e não do argumento `value`: o
- * JSON.stringify chama o `toJSON()` do Buffer ANTES do replacer, então `value`
- * já chega como `{ type: 'Buffer', data: [1,2,3...] }` — um array de números,
- * que funciona mas incha o JSON em ~4x. `this` ainda tem o Buffer original.
+ * The value has to be read from `this[key]` rather than the `value` argument:
+ * JSON.stringify calls the Buffer's `toJSON()` BEFORE the replacer runs, so
+ * `value` already arrives as `{ type: 'Buffer', data: [1,2,3...] }` — an array
+ * of numbers, which works but inflates the JSON roughly 4x. `this` still holds
+ * the original Buffer.
  */
 export function credsReplacer(this: unknown, key: string, value: unknown): unknown {
 	const original = (this as Record<string, unknown> | undefined)?.[key]

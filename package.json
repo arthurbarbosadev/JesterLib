@@ -1,7 +1,7 @@
 {
-  "name": "jester",
+  "name": "jesterlib",
   "version": "0.0.1",
-  "description": "Implementação em TypeScript do protocolo WhatsApp Web (multi-device)",
+  "description": "A from-scratch TypeScript implementation of the WhatsApp Web (multi-device) protocol: Noise handshake, WABinary, protobuf and QR pairing.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,7 +12,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -23,9 +24,12 @@
   },
   "keywords": [
     "whatsapp",
+    "whatsapp-web",
     "protocol",
-    "noise",
-    "websocket"
+    "noise-protocol",
+    "multi-device",
+    "reverse-engineering",
+    "typescript"
   ],
   "license": "MIT",
   "engines": {
@@ -39,5 +43,14 @@
     "@types/node": "^24.0.0",
     "@types/ws": "^8.5.13",
     "typescript": "^5.9.0"
-  }
+  },
+  "author": "Arthur Barbosa",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arthurbarbosadev/JesterLib.git"
+  },
+  "bugs": {
+    "url": "https://github.com/arthurbarbosadev/JesterLib/issues"
+  },
+  "homepage": "https://github.com/arthurbarbosadev/JesterLib#readme"
 }

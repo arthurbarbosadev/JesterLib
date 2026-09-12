@@ -10,22 +10,23 @@ import type { Transport } from '../../src/socket/transport.ts'
 import type { ClientPayloadType } from '../../src/proto/wa.ts'
 
 /**
- * WhatsApp simulado: fala Noise XX como responder e troca WABinary cifrado.
+ * Simulated WhatsApp server: speaks Noise XX as the responder and exchanges
+ * encrypted WABinary.
  *
- * Serve para exercitar a conexão inteira — intro, framing, handshake, modo
- * transporte, codec e roteamento de nós — sem tocar na rede. É o teste que
- * substitui "conecta e vê o que acontece".
+ * It exists to exercise the whole connection — intro, framing, handshake,
+ * transport mode, codec and node routing — without touching the network. It is
+ * the test that replaces "connect and see what happens".
  */
 export type FakeServer = {
-	/** ClientPayload que o cliente enviou, decodificado. */
+	/** The ClientPayload the client sent, decoded. */
 	clientPayload(): ClientPayloadType | undefined
-	/** Nós recebidos do cliente, em ordem. */
+	/** Nodes received from the client, in order. */
 	received(): BinaryNode[]
-	/** Envia um nó para o cliente (cifrado). */
+	/** Sends a node to the client (encrypted). */
 	send(node: BinaryNode): void
-	/** Responde automaticamente a nós que casem com o predicado. */
+	/** Automatically replies to nodes matching the predicate. */
 	autoRespond(match: (node: BinaryNode) => BinaryNode | undefined): void
-	/** Promise que resolve quando o handshake termina. */
+	/** Resolves once the handshake completes. */
 	ready(): Promise<void>
 }
 
@@ -51,7 +52,7 @@ export function attachFakeServer(
 	})
 
 	const send = (node: BinaryNode) => {
-		assert.ok(noise, 'servidor ainda não tem estado Noise')
+		assert.ok(noise, 'server has no Noise state yet')
 		transport.send(encodeFrame(noise.encrypt(encodeBinaryNode(node))))
 	}
 
@@ -59,7 +60,7 @@ export function attachFakeServer(
 		const { clientHello } = HandshakeMessage.decode(frame)
 		const clientEphemeral = clientHello?.ephemeral
 
-		assert.ok(clientEphemeral, 'ClientHello sem efêmera')
+		assert.ok(clientEphemeral, 'ClientHello has no ephemeral key')
 
 		noise = new NoiseHandler({
 			ephemeralPublic: clientEphemeral,
@@ -99,7 +100,7 @@ export function attachFakeServer(
 		assert.ok(noise)
 
 		const { clientFinish } = HandshakeMessage.decode(frame)
-		assert.ok(clientFinish?.static && clientFinish.payload, 'ClientFinish incompleto')
+		assert.ok(clientFinish?.static && clientFinish.payload, 'incomplete ClientFinish')
 
 		const clientStatic = noise.decrypt(clientFinish.static)
 		noise.mixIntoKey(Curve.sharedKey(ephemeral.private, clientStatic))
@@ -135,8 +136,8 @@ export function attachFakeServer(
 		let data = chunk
 
 		if (!introStripped) {
-			// O primeiro frame do cliente vem precedido do header WA.
-			assert.deepEqual(data.subarray(0, waHeader.length), waHeader, 'header WA ausente ou errado')
+			// The client's first frame is preceded by the WA header.
+			assert.deepEqual(data.subarray(0, waHeader.length), waHeader, 'WA header missing or wrong')
 			data = data.subarray(waHeader.length)
 			introStripped = true
 		}

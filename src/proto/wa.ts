@@ -1,12 +1,12 @@
 import { defineMessage, f, r, type Infer } from './schema.ts'
 
 /**
- * Subconjunto do WAProto necessário para handshake, login e pareamento.
+ * The subset of WAProto needed for handshake, login and pairing.
  *
- * Os números de campo vêm do bundle do WhatsApp Web e são a parte que NÃO pode
- * ser adivinhada: trocar um id quebra silenciosamente (o servidor apenas fecha
- * a conexão). Os nomes são livres — usamos os mesmos do bundle para facilitar o
- * diff contra implementações de referência.
+ * The field numbers come from the WhatsApp Web bundle and are the part that
+ * CANNOT be guessed: changing an id breaks things silently (the server simply
+ * closes the connection). The names are free-form — we use the bundle's names to
+ * make diffing against reference implementations easier.
  */
 
 // ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ export const HandshakeMessage = defineMessage('HandshakeMessage', {
 })
 
 // ---------------------------------------------------------------------------
-// Certificado do servidor (validado ao final do handshake)
+// Server certificate (validated at the end of the handshake)
 // ---------------------------------------------------------------------------
 
 export const NoiseCertificateDetails = defineMessage('NoiseCertificate.Details', {
@@ -59,7 +59,7 @@ export const CertChain = defineMessage('CertChain', {
 })
 
 // ---------------------------------------------------------------------------
-// ClientPayload — enviado cifrado dentro do ClientFinish
+// ClientPayload — sent encrypted inside the ClientFinish
 // ---------------------------------------------------------------------------
 
 export const AppVersion = defineMessage('AppVersion', {
@@ -155,7 +155,7 @@ export const ClientPayload = defineMessage('ClientPayload', {
 })
 
 // ---------------------------------------------------------------------------
-// DeviceProps — serializado e embutido em devicePairingData.deviceProps
+// DeviceProps — serialized and embedded in devicePairingData.deviceProps
 // ---------------------------------------------------------------------------
 
 export const HistorySyncConfig = defineMessage('DeviceProps.HistorySyncConfig', {
@@ -178,7 +178,7 @@ export const DeviceProps = defineMessage('DeviceProps', {
 })
 
 // ---------------------------------------------------------------------------
-// ADV — identidade do dispositivo companheiro (fluxo de pareamento)
+// ADV — companion device identity (pairing flow)
 // ---------------------------------------------------------------------------
 
 export const ADVSignedDeviceIdentityHMAC = defineMessage('ADVSignedDeviceIdentityHMAC', {
@@ -217,7 +217,7 @@ export const ADVSignedKeyIndexList = defineMessage('ADVSignedKeyIndexList', {
 })
 
 // ---------------------------------------------------------------------------
-// Enums — objetos const, porque `enum` do TS não sobrevive ao type stripping
+// Enums — const objects, because TS `enum` does not survive type stripping
 // ---------------------------------------------------------------------------
 
 export const Platform = {

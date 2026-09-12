@@ -25,14 +25,14 @@ class BinaryWriter {
 		}
 	}
 
-	/** Inteiro big-endian de `size` bytes. */
+	/** Big-endian integer of `size` bytes. */
 	int(value: number, size: number): void {
 		for (let i = size - 1; i >= 0; i--) {
 			this.byte((value >> (i * 8)) & 0xff)
 		}
 	}
 
-	/** Inteiro de 20 bits em 3 bytes — usado só pelo tamanho BINARY_20. */
+	/** 20-bit integer in 3 bytes — used only by the BINARY_20 length. */
 	int20(value: number): void {
 		this.byte((value >> 16) & 0x0f)
 		this.byte((value >> 8) & 0xff)
@@ -61,7 +61,7 @@ function packNibble(char: string): number {
 		return PACKED_PAD
 	}
 
-	throw new Error(`caractere inválido para nibble: ${JSON.stringify(char)}`)
+	throw new Error(`invalid character for nibble packing: ${JSON.stringify(char)}`)
 }
 
 function packHex(char: string): number {
@@ -77,7 +77,7 @@ function packHex(char: string): number {
 		return PACKED_PAD
 	}
 
-	throw new Error(`caractere inválido para hex: ${JSON.stringify(char)}`)
+	throw new Error(`invalid character for hex packing: ${JSON.stringify(char)}`)
 }
 
 export class BinaryNodeEncoder {
@@ -97,7 +97,7 @@ export class BinaryNodeEncoder {
 
 	private writeByteLength(length: number): void {
 		if (length >= 4294967296) {
-			throw new Error(`conteúdo grande demais para o WABinary: ${length} bytes`)
+			throw new Error(`content too large for WABinary: ${length} bytes`)
 		}
 
 		if (length >= 1 << 20) {
@@ -113,8 +113,8 @@ export class BinaryNodeEncoder {
 	}
 
 	/**
-	 * Empacota dois caracteres por byte. Se o tamanho for ímpar, o bit alto do
-	 * byte de tamanho sinaliza que o último nibble é preenchimento.
+	 * Packs two characters per byte. When the length is odd, the high bit of the
+	 * length byte signals that the last nibble is padding.
 	 */
 	private writePacked(value: string, kind: 'nibble' | 'hex'): void {
 		this.w.byte(kind === 'nibble' ? TAGS.NIBBLE_8 : TAGS.HEX_8)
@@ -143,7 +143,7 @@ export class BinaryNodeEncoder {
 	private writeJid(jid: FullJid): void {
 		const domainType = serverToDomainType(jid.server)
 
-		// AD_JID só existe para endereçar um device específico em s.whatsapp.net/lid.
+		// AD_JID only exists to address a specific device on s.whatsapp.net/lid.
 		if (jid.device !== undefined && domainType !== undefined) {
 			this.w.byte(TAGS.AD_JID)
 			this.w.byte(domainType)
@@ -195,7 +195,7 @@ export class BinaryNodeEncoder {
 			return
 		}
 
-		// Um JID cabe em muito menos bytes do que a sua forma textual.
+		// A JID fits in far fewer bytes than its textual form.
 		const jid = jidDecode(value)
 
 		if (jid) {
@@ -228,14 +228,14 @@ export class BinaryNodeEncoder {
 			return
 		}
 
-		throw new Error(`tipo de conteúdo não suportado: ${typeof content}`)
+		throw new Error(`unsupported content type: ${typeof content}`)
 	}
 
 	writeNode(node: BinaryNode): void {
 		const attrs = Object.entries(node.attrs).filter(([, v]) => v !== undefined && v !== null)
 		const hasContent = node.content !== undefined
 
-		// Um nó é uma lista: [tag, k1, v1, k2, v2, ..., content?]
+		// A node is a list: [tag, k1, v1, k2, v2, ..., content?]
 		this.writeListStart(2 * attrs.length + 1 + (hasContent ? 1 : 0))
 		this.writeString(node.tag)
 
@@ -255,8 +255,8 @@ export class BinaryNodeEncoder {
 }
 
 /**
- * Serializa um nó. O byte 0 na frente é o flag de compressão do frame —
- * sempre 0 no envio (o cliente não comprime; o servidor pode comprimir).
+ * Serializes a node. The leading 0 byte is the frame compression flag — always
+ * 0 when sending (the client never compresses; the server may).
  */
 export function encodeBinaryNode(node: BinaryNode): Buffer {
 	const encoder = new BinaryNodeEncoder()
@@ -265,7 +265,7 @@ export function encodeBinaryNode(node: BinaryNode): Buffer {
 	return Buffer.concat([Buffer.from([0]), encoder.finish()])
 }
 
-/** Serializa sem o byte de flag — útil para testar o codec isoladamente. */
+/** Serializes without the flag byte — useful to test the codec in isolation. */
 export function encodeBinaryNodeBody(node: BinaryNode): Buffer {
 	const encoder = new BinaryNodeEncoder()
 	encoder.writeNode(node)

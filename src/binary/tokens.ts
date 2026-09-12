@@ -1,21 +1,22 @@
 /**
- * Dicionário de tokens do WABinary.
+ * WABinary token dictionary.
  *
- * O protocolo substitui strings frequentes ("message", "from", "s.whatsapp.net"…)
- * por índices de 1 ou 2 bytes. Isso é *dado*, não lógica: a tabela vive no bundle
- * do WhatsApp Web e muda entre versões. Um único token fora de ordem desloca
- * todos os seguintes e o stream quebra em silêncio — o servidor apenas fecha a
- * conexão, sem erro legível.
+ * The protocol replaces frequent strings ("message", "from", "s.whatsapp.net"…)
+ * with 1- or 2-byte indexes. This is *data*, not logic: the table lives in the
+ * WhatsApp Web bundle and changes between versions. A single token out of order
+ * shifts every token after it and the stream breaks silently — the server just
+ * closes the connection, with no readable error.
  *
- * Por isso a tabela não é escrita à mão: ela é extraída com
- * `npm run vendor:tokens`, que grava `tokens.generated.ts`. Todo o codec deste
- * módulo é independente da tabela e é testado com um dicionário sintético.
+ * That is why the table is not written by hand: it is extracted with
+ * `npm run vendor:tokens`, which writes `tokens.generated.ts`. The whole codec
+ * in this module is independent of the table and is tested against a synthetic
+ * dictionary.
  */
 
 export type TokenDictionary = {
-	/** Índice 0 é reservado (LIST_EMPTY); tokens úteis começam em 1. */
+	/** Index 0 is reserved (LIST_EMPTY); usable tokens start at 1. */
 	single: readonly (string | null)[]
-	/** Quatro dicionários secundários, endereçados por DICTIONARY_0..3. */
+	/** Four secondary dictionaries, addressed by DICTIONARY_0..3. */
 	double: readonly (readonly string[])[]
 }
 
@@ -29,9 +30,9 @@ let loaded: LoadedDictionary | undefined
 export class MissingTokenDictionaryError extends Error {
 	constructor() {
 		super(
-			'dicionário de tokens do WABinary não carregado.\n' +
-				'Rode `npm run vendor:tokens` para gerar src/binary/tokens.generated.ts, ' +
-				'ou chame setTokenDictionary() manualmente antes de codificar/decodificar.',
+			'WABinary token dictionary is not loaded.\n' +
+				'Run `npm run vendor:tokens` to generate src/binary/tokens.generated.ts, ' +
+				'or call setTokenDictionary() manually before encoding/decoding.',
 		)
 		this.name = 'MissingTokenDictionaryError'
 	}
@@ -43,7 +44,7 @@ export function setTokenDictionary(dict: TokenDictionary): void {
 	for (let i = 0; i < dict.single.length; i++) {
 		const token = dict.single[i]
 
-		// Primeira ocorrência vence: índices menores gastam menos bytes.
+		// First occurrence wins: lower indexes cost fewer bytes.
 		if (token && !singleIndex.has(token)) {
 			singleIndex.set(token, i)
 		}
@@ -78,12 +79,12 @@ export function getTokenDictionary(): LoadedDictionary {
 	return loaded
 }
 
-/** Índice de 1 byte para um token, se ele estiver no dicionário primário. */
+/** The 1-byte index for a token, if it is in the primary dictionary. */
 export function lookupSingleToken(token: string): number | undefined {
 	return getTokenDictionary().singleIndex.get(token)
 }
 
-/** Par (dicionário, índice) para um token do dicionário secundário. */
+/** The (dictionary, index) pair for a token in a secondary dictionary. */
 export function lookupDoubleToken(token: string): readonly [number, number] | undefined {
 	return getTokenDictionary().doubleIndex.get(token)
 }
@@ -92,7 +93,7 @@ export function singleTokenAt(index: number): string {
 	const token = getTokenDictionary().single[index]
 
 	if (token === null || token === undefined) {
-		throw new Error(`token primário inválido no índice ${index}`)
+		throw new Error(`invalid primary token at index ${index}`)
 	}
 
 	return token
@@ -102,19 +103,19 @@ export function doubleTokenAt(dictionary: number, index: number): string {
 	const sub = getTokenDictionary().double[dictionary]
 
 	if (!sub) {
-		throw new Error(`dicionário secundário ${dictionary} não existe`)
+		throw new Error(`secondary dictionary ${dictionary} does not exist`)
 	}
 
 	const token = sub[index]
 
 	if (token === undefined) {
-		throw new Error(`token inválido no dicionário ${dictionary}, índice ${index}`)
+		throw new Error(`invalid token in dictionary ${dictionary} at index ${index}`)
 	}
 
 	return token
 }
 
-/** Quantidade de tokens primários — define onde termina a faixa de tags-token. */
+/** Number of primary tokens — defines where the token-tag range ends. */
 export function singleTokenCount(): number {
 	return getTokenDictionary().single.length
 }

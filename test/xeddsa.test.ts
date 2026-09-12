@@ -10,52 +10,52 @@ import {
 	xeddsaVerify,
 } from '../src/crypto/xeddsa.ts'
 
-test('assina e verifica', () => {
+test('signs and verifies', () => {
 	const { private: priv, public: pub } = Curve.generateKeyPair()
-	const message = Buffer.from('mensagem para assinar')
+	const message = Buffer.from('message to sign')
 	const signature = xeddsaSign(priv, message)
 
 	assert.equal(signature.length, SIGNATURE_LENGTH)
 	assert.equal(xeddsaVerify(pub, message, signature), true)
 })
 
-test('aceita chave pública com o byte de tipo 0x05', () => {
+test('accepts a public key carrying the 0x05 type byte', () => {
 	const { private: priv, public: pub } = Curve.generateKeyPair()
-	const message = Buffer.from('prekey assinada')
+	const message = Buffer.from('signed prekey')
 	const signature = xeddsaSign(priv, message)
 
 	assert.equal(xeddsaVerify(addKeyType(pub), message, signature), true)
 })
 
-test('rejeita mensagem alterada', () => {
+test('rejects a modified message', () => {
 	const { private: priv, public: pub } = Curve.generateKeyPair()
 	const signature = xeddsaSign(priv, Buffer.from('original'))
 
-	assert.equal(xeddsaVerify(pub, Buffer.from('adulterada'), signature), false)
+	assert.equal(xeddsaVerify(pub, Buffer.from('tampered'), signature), false)
 })
 
-test('rejeita assinatura alterada', () => {
+test('rejects a modified signature', () => {
 	const { private: priv, public: pub } = Curve.generateKeyPair()
-	const message = Buffer.from('mensagem')
+	const message = Buffer.from('message')
 	const signature = xeddsaSign(priv, message)
 
 	for (const index of [0, 31, 32, 63]) {
 		const tampered = Buffer.from(signature)
 		tampered.writeUInt8(tampered.readUInt8(index) ^ 0x01, index)
 
-		assert.equal(xeddsaVerify(pub, message, tampered), false, `byte ${index} não detectado`)
+		assert.equal(xeddsaVerify(pub, message, tampered), false, `byte ${index} went undetected`)
 	}
 })
 
-test('rejeita assinatura de outra chave', () => {
+test('rejects a signature from a different key', () => {
 	const a = Curve.generateKeyPair()
 	const b = Curve.generateKeyPair()
-	const message = Buffer.from('mensagem')
+	const message = Buffer.from('message')
 
 	assert.equal(xeddsaVerify(b.public, message, xeddsaSign(a.private, message)), false)
 })
 
-test('rejeita assinatura de tamanho errado', () => {
+test('rejects a signature of the wrong length', () => {
 	const { private: priv, public: pub } = Curve.generateKeyPair()
 	const message = Buffer.from('m')
 	const signature = xeddsaSign(priv, message)
@@ -64,9 +64,9 @@ test('rejeita assinatura de tamanho errado', () => {
 	assert.equal(xeddsaVerify(pub, message, Buffer.concat([signature, Buffer.alloc(1)])), false)
 })
 
-test('é determinístico dado o mesmo nonce, e randomizado sem ele', () => {
+test('is deterministic with a fixed nonce and randomized without one', () => {
 	const { private: priv } = Curve.generateKeyPair()
-	const message = Buffer.from('mensagem')
+	const message = Buffer.from('message')
 	const nonce = Buffer.alloc(64, 7)
 
 	assert.deepEqual(xeddsaSign(priv, message, nonce), xeddsaSign(priv, message, nonce))
@@ -74,13 +74,13 @@ test('é determinístico dado o mesmo nonce, e randomizado sem ele', () => {
 })
 
 /**
- * Caminho de verificação independente: o mesmo cálculo feito pelo @noble, não
- * pelo OpenSSL. Se os dois concordam, o erro teria que estar nos dois ao mesmo
- * tempo — e eles não compartilham código.
+ * An independent verification path: the same computation done by @noble rather
+ * than OpenSSL. If both agree, a bug would have to exist in both at once — and
+ * they share no code.
  */
-test('a assinatura também verifica no Ed25519 do @noble', () => {
+test('the signature also verifies under @noble Ed25519', () => {
 	const { private: priv, public: pub } = Curve.generateKeyPair()
-	const message = Buffer.from('checagem cruzada')
+	const message = Buffer.from('cross-check')
 	const signature = xeddsaSign(priv, message)
 	const edwards = montgomeryToEdwardsPublic(pub)
 
@@ -88,10 +88,10 @@ test('a assinatura também verifica no Ed25519 do @noble', () => {
 })
 
 /**
- * Fecha o ciclo Montgomery -> Edwards -> Montgomery usando a conversão do
- * @noble na volta. Valida que o mapa biracional está correto nos dois sentidos.
+ * Closes the Montgomery -> Edwards -> Montgomery loop using @noble conversion
+ * on the way back. Validates the birational map in both directions.
  */
-test('conversão Montgomery <-> Edwards é consistente', () => {
+test('Montgomery <-> Edwards conversion is consistent', () => {
 	for (let i = 0; i < 20; i++) {
 		const { public: montgomery } = Curve.generateKeyPair()
 		const edwards = montgomeryToEdwardsPublic(montgomery)
@@ -101,13 +101,13 @@ test('conversão Montgomery <-> Edwards é consistente', () => {
 })
 
 /**
- * O bit de sinal da chave Edwards é 1 em ~metade das chaves. Se a negação do
- * escalar estiver faltando, metade dos casos falha — este laço garante que os
- * dois ramos são exercitados.
+ * The Edwards key sign bit is 1 for roughly half of all keys. If the scalar
+ * negation is missing, half the cases fail — this loop makes sure both branches
+ * are exercised.
  */
-test('funciona para os dois valores do bit de sinal', () => {
-	let comSinal = 0
-	let semSinal = 0
+test('works for both values of the sign bit', () => {
+	let withSignBit = 0
+	let withoutSignBit = 0
 
 	for (let i = 0; i < 40; i++) {
 		const { private: priv, public: pub } = Curve.generateKeyPair()
@@ -115,7 +115,7 @@ test('funciona para os dois valores do bit de sinal', () => {
 
 		assert.equal(xeddsaVerify(pub, message, xeddsaSign(priv, message)), true)
 
-		// reconstrói o ponto Edwards não normalizado para saber qual ramo caiu
+		// rebuild the un-normalized Edwards point to see which branch was taken
 		const scalar = Buffer.from(priv)
 		scalar[0]! &= 248
 		scalar[31]! &= 127
@@ -129,17 +129,17 @@ test('funciona para os dois valores do bit de sinal', () => {
 		const encoded = ed25519.Point.BASE.multiply(k % ed25519.Point.CURVE().n).toBytes()
 
 		if ((encoded[31]! >> 7) & 1) {
-			comSinal++
+			withSignBit++
 		} else {
-			semSinal++
+			withoutSignBit++
 		}
 	}
 
-	assert.ok(comSinal > 0, 'nenhuma chave com bit de sinal 1 foi testada')
-	assert.ok(semSinal > 0, 'nenhuma chave com bit de sinal 0 foi testada')
+	assert.ok(withSignBit > 0, 'no key with sign bit 1 was tested')
+	assert.ok(withoutSignBit > 0, 'no key with sign bit 0 was tested')
 })
 
-test('mensagem vazia e mensagem longa', () => {
+test('empty message and long message', () => {
 	const { private: priv, public: pub } = Curve.generateKeyPair()
 
 	for (const message of [Buffer.alloc(0), randomBytes(100_000)]) {
