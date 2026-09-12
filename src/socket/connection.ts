@@ -1,5 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { randomBytes } from 'node:crypto'
+import type { AuthenticationCreds } from '../auth/creds.ts'
+import {
+	buildPairDeviceAck,
+	buildQrString,
+	configureSuccessfulPairing,
+	extractPairingRefs,
+} from '../auth/pairing.ts'
 import type { AuthenticationState } from '../auth/state.ts'
 import { decodeBinaryNode } from '../binary/decode.ts'
 import { encodeBinaryNode } from '../binary/encode.ts'
@@ -73,6 +80,10 @@ export type JesterSocketOptions = {
 	defaultQueryTimeoutMs?: number
 	countryCode?: string
 	languageCode?: string
+	/** Validade do primeiro QR; o celular precisa de tempo para abrir a câmera. */
+	qrTimeoutMs?: number
+	/** Validade dos QRs seguintes — os refs expiram rápido no servidor. */
+	qrRefreshMs?: number
 }
 
 const DEFAULT_VERSION: [number, number, number] = [2, 3000, 1015901307]
@@ -108,6 +119,8 @@ export class JesterSocket extends EventEmitter {
 	>()
 
 	private keepAliveTimer?: NodeJS.Timeout
+	private qrTimer?: NodeJS.Timeout
+	private qrRefs: string[] = []
 	private epoch = 0
 	private closed = false
 
@@ -332,6 +345,9 @@ export class JesterSocket extends EventEmitter {
 		this.emit('node', node)
 
 		switch (node.tag) {
+			case 'iq':
+				this.onIq(node)
+				break
 			case 'success':
 				this.onSuccess(node)
 				break
@@ -348,6 +364,84 @@ export class JesterSocket extends EventEmitter {
 				this.onClose(new ConnectionError('stream encerrado pelo servidor', DisconnectReason.connectionClosed))
 				break
 		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Pareamento
+	// -------------------------------------------------------------------------
+
+	/** IQs iniciados pelo servidor. Os do pareamento são os que importam aqui. */
+	private onIq(node: BinaryNode): void {
+		if (getBinaryNodeChild(node, 'pair-device')) {
+			this.onPairDevice(node)
+			return
+		}
+
+		if (getBinaryNodeChild(node, 'pair-success')) {
+			this.onPairSuccess(node)
+		}
+	}
+
+	private onPairDevice(node: BinaryNode): void {
+		const id = node.attrs.id
+
+		if (!id) {
+			this.logger.warn({}, '<pair-device> sem id; ignorando')
+			return
+		}
+
+		// O servidor só emite os refs seguintes depois do ACK.
+		this.sendNode(buildPairDeviceAck(id))
+
+		this.qrRefs = extractPairingRefs(node)
+		this.emitNextQr(this.options.qrTimeoutMs ?? 60_000)
+	}
+
+	/**
+	 * Publica o próximo QR e agenda a rotação. Quando os refs acabam, o
+	 * pareamento expirou — não adianta insistir, o servidor precisa de uma
+	 * conexão nova.
+	 */
+	private emitNextQr(validForMs: number): void {
+		clearTimeout(this.qrTimer)
+
+		const ref = this.qrRefs.shift()
+
+		if (!ref) {
+			this.onClose(new ConnectionError('refs do QR esgotados', DisconnectReason.timedOut))
+			return
+		}
+
+		this.updateState({ qr: buildQrString(ref, this.auth.creds) })
+
+		this.qrTimer = setTimeout(
+			() => this.emitNextQr(this.options.qrRefreshMs ?? 20_000),
+			validForMs,
+		)
+		this.qrTimer.unref?.()
+	}
+
+	private onPairSuccess(node: BinaryNode): void {
+		clearTimeout(this.qrTimer)
+
+		try {
+			const { reply, update } = configureSuccessfulPairing(node, this.auth.creds)
+
+			this.applyCredsUpdate(update)
+			this.sendNode(reply)
+
+			// O servidor encerra a seguir com stream:error 515 (restartRequired):
+			// é esperado, e a reconexão já usa o payload de login.
+			this.updateState({ isNewLogin: true, qr: undefined })
+		} catch (err) {
+			this.logger.error({ err }, 'pareamento falhou')
+			this.onClose(err as Error)
+		}
+	}
+
+	private applyCredsUpdate(update: Partial<AuthenticationCreds>): void {
+		Object.assign(this.auth.creds, update)
+		this.emit('creds.update', this.auth.creds)
 	}
 
 	private onSuccess(node: BinaryNode): void {
@@ -434,6 +528,7 @@ export class JesterSocket extends EventEmitter {
 		this.closed = true
 
 		clearInterval(this.keepAliveTimer)
+		clearTimeout(this.qrTimer)
 
 		for (const [, pending] of this.pendingRequests) {
 			clearTimeout(pending.timer)

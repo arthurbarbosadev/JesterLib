@@ -132,13 +132,16 @@ export function buildLoginClientPayload(
 	return ClientPayload.encode(payload)
 }
 
+/**
+ * A escolha é feita por `me.id`, não por `registered`: `me` é o que o protocolo
+ * de fato exige para logar, e credenciais restauradas de um formato antigo (sem
+ * o flag) entrariam em loop de QR eternamente.
+ */
 export function buildClientPayload(
 	creds: AuthenticationCreds,
 	config: ClientPayloadConfig,
 ): Buffer {
-	return creds.registered && creds.me?.id
-		? buildLoginClientPayload(creds, config)
-		: buildRegisterClientPayload(creds, config)
+	return creds.me?.id ? buildLoginClientPayload(creds, config) : buildRegisterClientPayload(creds, config)
 }
 
 /** Chave pública no formato do libsignal (33 bytes, prefixada com 0x05). */

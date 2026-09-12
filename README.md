@@ -18,11 +18,11 @@ descartável — cai, sobe outro, retoma a sessão sem ler QR de novo.
 | Framing + handshake Noise XX | pronto, validado contra servidor simulado | [src/noise/](src/noise/) |
 | Credenciais e estado de autenticação | pronto, serializável | [src/auth/](src/auth/) |
 | Conexão (handshake, queries, roteamento de nós) | pronto, validado ponta a ponta | [src/socket/](src/socket/) |
-| Pareamento por QR | **próximo** | — |
+| Pareamento por QR (ADV, contra-assinatura) | pronto, validado contra celular simulado | [src/auth/pairing.ts](src/auth/pairing.ts) |
 | Signal (E2E) | não começado | — |
 | App state sync, mídia | fora do escopo inicial | — |
 
-`npm test` → 74 testes, todos passando. `npm run typecheck` e `npm run build` → limpos.
+`npm test` → 83 testes, todos passando. `npm run typecheck` e `npm run build` → limpos.
 
 ## O passo que falta antes de conectar de verdade
 
@@ -58,6 +58,24 @@ socket.on('creds.update', creds => {
 })
 
 await socket.connect()
+```
+
+### Pareamento
+
+Depois que o celular lê o QR, o servidor **derruba a conexão** com
+`stream:error code="515"` (`restartRequired`). Isso é esperado, não é erro: as
+credenciais já foram gravadas, e basta reconectar — a segunda conexão já usa o
+payload de login.
+
+```ts
+socket.on('connection.update', ({ connection, lastDisconnect }) => {
+  if (connection === 'close') {
+    const code = (lastDisconnect?.error as ConnectionError)?.code
+    const deveReconectar = code !== DisconnectReason.loggedOut
+
+    if (deveReconectar) reconecta()   // nova instância, mesmas credenciais
+  }
+})
 ```
 
 ## Arquitetura
@@ -98,9 +116,9 @@ que por acaso são UTF-8 válido.
 ## Próximos passos
 
 1. Vendorizar a tabela de tokens (acima)
-2. Pareamento: geração do QR, `pair-device` / `pair-success`, validação da ADV
+2. Upload de prekeys (`<iq xmlns="encrypt">`)
 3. Persistência em Supabase para o estado de autenticação
-4. Signal Protocol: sessões, prekeys, receber e enviar texto
+4. Signal Protocol: sessões, receber e enviar texto
 
 ## Avisos
 
