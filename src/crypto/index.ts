@@ -8,6 +8,7 @@ import {
 } from 'node:crypto'
 
 export * from './curve.ts'
+export * from './xeddsa.ts'
 export { randomBytes }
 
 export function sha256(data: Buffer): Buffer {

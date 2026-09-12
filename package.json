@@ -10,7 +10,10 @@
     "./binary": "./dist/binary/index.js",
     "./proto": "./dist/proto/index.js"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
@@ -18,10 +21,18 @@
     "test:watch": "node --test --watch --experimental-strip-types \"test/**/*.test.ts\"",
     "vendor:tokens": "node scripts/vendor-tokens.mjs"
   },
-  "keywords": ["whatsapp", "protocol", "noise", "websocket"],
+  "keywords": [
+    "whatsapp",
+    "protocol",
+    "noise",
+    "websocket"
+  ],
   "license": "MIT",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
+    "@noble/curves": "^2.4.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
