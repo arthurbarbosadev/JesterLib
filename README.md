@@ -1,4 +1,4 @@
-# Jester
+# Jester Lib
 
 A TypeScript implementation of the WhatsApp Web (multi-device) protocol, written
 from scratch.
